@@ -114,7 +114,8 @@ All times in CTRACK are presented and automatically converted in easily understa
 
 ### Summary Table
 
-[placeholder for image]
+![image](https://github.com/user-attachments/assets/0232a57c-8a3e-4a7b-a143-62bb8e2b9825)
+
 
 #### Summary Header
 - Start and End time of tracking
@@ -132,7 +133,7 @@ The summary table is sorted by the active exclusive [center interval] metric.
 
 ### Detail Table
 
-[placeholder for image]
+![image](https://github.com/user-attachments/assets/ae9cf8e9-52b8-42ed-95fa-c95a418da510)
 
 For each function:
 - Filename, function, line
