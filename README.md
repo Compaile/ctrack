@@ -1,11 +1,11 @@
 # CTRACK ![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-=======
+
 An open-source benchmark and tracking library for C++ projects, designed to provide deep insights into function performance with minimal overhead.
 
 CTRACK is a powerful tool that can be seamlessly integrated into both development and production environments. It allows developers to effortlessly monitor applications and identify bottlenecks, requiring minimal setup and maintenance.
 
 ## Features
-=======
+
 - Single header file
 - No dependencies
 - Easy to use (just 1 line per function you want to track)
@@ -20,13 +20,13 @@ CTRACK is a powerful tool that can be seamlessly integrated into both developmen
 
 
 ## Goals
-=======
+
 1. Help developers identify areas for performance improvement
 2. Monitor application performance in production
 
 
 ## Basic Usage 
-=======
+
 CTRACK is easy to use and provides powerful performance insights. Here's how to get started:
 
 1. To track a function, simply add the `CTRACK;` macro at the beginning of the function body:
@@ -83,7 +83,7 @@ Additionally, be sure to check out the examples directory in the repository for 
 
 
 ## Metrics & Output
-=======
+
 CTRACK provides comprehensive performance metrics through two main components: the Summary Table and the Detail Table. These tables offer different levels of insight into your application's performance.
 
 ### Time Units
@@ -155,7 +155,7 @@ This comprehensive set of metrics allows for deep insight into your application'
 For more advanced usage and customization options, please refer to the [Advanced Usage](#advanced-usage) section below.
 
 ## Installation
-=======
+
 CTRACK is designed to be easy to integrate into your C++ projects. There are two primary ways to use CTRACK:
 
 ### 1. Header-Only Inclusion
@@ -197,7 +197,7 @@ Choose the installation method that best fits your project's needs and structure
 
 
 ## Advanced Usage
-=======
+
 ### Customizing Output Settings
 
 You can fine-tune CTRACK's output using the `ctrack_result_settings` struct:
@@ -260,7 +260,7 @@ std::string custom_result = ctrack::result_as_string(settings);
 This advanced usage allows you to tailor CTRACK to your specific needs, from fine-tuning output to integrating with complex systems and workflows.
 
 ## Performance Benchmarks
-=======
+
 The recording of events in this project is extremely fast. You can use the example projects to test it on your own system.
 
 - On an i9-12900KS:
@@ -272,7 +272,7 @@ The calculation of results is also efficient. However, the primary focus of ctra
 Would you like me to explain any part of this new section or suggest any modifications?
 
 ## Why Another Benchmark Library?
-=======
+
 While there are several excellent benchmarking and profiling tools available, CTRACK fills a unique niche in the C++ performance analysis ecosystem. Here's why CTRACK stands out:
 
 1. **Production-Ready**: Unlike libraries such as Google Benchmark, which require specific benchmark calls, CTRACK can be seamlessly used in both development and production environments.
@@ -297,7 +297,7 @@ CTRACK combines the ease of use of manual timing with the robustness of professi
 
 
 ## Contributing
-=======
+
 We welcome and encourage contributions from the community! Your input helps make CTRACK better for everyone. Here's how you can contribute:
 
 ### Roadmap
@@ -322,6 +322,6 @@ Found a bug? We want to hear about it! Please open an issue on our GitHub reposi
 Have an idea for a new feature? Feel free to open an issue to discuss it. We're always looking for ways to make CTRACK more useful.
 
 ## License
-=======
+
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
