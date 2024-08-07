@@ -632,7 +632,7 @@ namespace ctrack {
 
 		struct ctrack_result_settings {
 			unsigned int non_center_percent = 1;
-			double min_percent_active_exclusive = 0.5; //between 0-100
+			double min_percent_active_exclusive = 0.0; //between 0-100
 			double percent_exclude_fastest_active_exclusive = 0.0; //between 0-100
 		};
 
