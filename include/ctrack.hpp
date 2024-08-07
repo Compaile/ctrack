@@ -1,3 +1,6 @@
+// Copyright (c) 2024 COMPAILE Solutions GmbH - Grischa Hauser
+// License:MIT License See LICENSE for the full license.
+// https://github.com/Compaile/ctrack
 #pragma once
 #ifndef CTRACK_H
 #define CTRACK_H
