@@ -7,7 +7,7 @@ CTRACK is a powerful tool that can be seamlessly integrated into both developmen
 ## Features
 
 - Single header file
-- No dependencies
+- No dependencies (optional tbb for non msvc to use paralell result calculation) 
 - Easy to use (just 1 line per function you want to track)
 - Minimal overhead (can record tens of millions events per second)
 - Optimized for multi-threaded environments
@@ -168,6 +168,9 @@ CTRACK is a header-only library, which means you can start using it by simply in
 
 This method is straightforward and doesn't require any additional setup or build process.
 
+Note: If you are using a compiler which needs TBB for C++ standard parallel algorithms, you need to link to -ltbb. You can always fall back to sequential result calculation by setting
+CTRACK_DISABLE_EXECUTION_POLICY. The recording will be unchanged, but the printing/calculating of the stats will be a bit slower.
+
 ### 2. CMake Package
 
 For projects using CMake, CTRACK can be installed and used as a CMake package. This method provides better integration with your build system and makes it easier to manage dependencies.
@@ -190,6 +193,11 @@ To use CTRACK as a CMake package:
    find_package(CTRACK REQUIRED)
    target_link_libraries(your_target PRIVATE CTRACK::CTRACK)
    ```
+
+Note: If you are using a compiler which needs TBB for C++ standard parallel algorithms, you need to link to tbb. 
+  ```target_link_libraries( your_target PRIVATE  TBB::tbb )   ```
+You can always fall back to sequential result calculation by setting
+CTRACK_DISABLE_EXECUTION_POLICY. The recording will be unchanged, but the printing/calculating of the stats will be a bit slower.
 
 For more detailed examples of how to use CTRACK with CMake, please refer to the `examples` directory in the CTRACK repository.
 
