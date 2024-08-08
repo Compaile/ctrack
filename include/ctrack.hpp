@@ -17,16 +17,20 @@
 #include <algorithm>
 #include <set>
 #include <numeric>
+#ifndef CTRACK_DISABLE_EXECUTION_POLICY
 #include <execution>
+#endif
 #include <vector>
 #include <iomanip>
 #include <fstream>
 #include <filesystem>
 #include <sstream>
+#include <atomic>
+#include <cmath>
 
 #define CTRACK_VERSION_MAJOR 1
 #define CTRACK_VERSION_MINOR 0
-#define CTRACK_VERSION_PATCH 0
+#define CTRACK_VERSION_PATCH 1
 
 // Helper macro to convert a numeric value to a string
 #define STRINGIFY(x) #x
@@ -44,14 +48,18 @@
 namespace ctrack {
 
 	inline namespace CTRACK_VERSION_NAMESPACE {
-
+#ifndef CTRACK_DISABLE_EXECUTION_POLICY
 		constexpr auto execution_policy = std::execution::par_unseq;
+#define OPT_EXEC_POLICY execution_policy,
+#else
+#define OPT_EXEC_POLICY
+#endif
 
 		template<typename T, typename Field>
 		auto sum_field(const std::vector<T>& vec, Field T::* field) {
 			using FieldType = std::decay_t<decltype(std::declval<T>().*field)>;
 			return std::transform_reduce(
-				execution_policy,
+				OPT_EXEC_POLICY
 				vec.begin(), vec.end(),
 				FieldType{},
 				std::plus<>(),
@@ -63,7 +71,7 @@ namespace ctrack {
 		auto sum_squared_field(const std::vector<T>& values, Field T::* field) {
 			using FieldType = std::decay_t<decltype(std::declval<T>().*field)>;
 			return std::transform_reduce(
-				execution_policy,
+				OPT_EXEC_POLICY
 				values.begin(), values.end(),
 				FieldType{},
 				std::plus<>(),
@@ -76,7 +84,7 @@ namespace ctrack {
 		template<typename T, typename Field>
 		double calculate_std_dev_field(std::vector<T>& values, Field T::* field, const double mean) {
 			double res = std::transform_reduce(
-				execution_policy,
+				OPT_EXEC_POLICY
 				values.begin(), values.end(),
 				0.0,
 				std::plus<>(),
@@ -105,7 +113,7 @@ namespace ctrack {
 
 		template <typename StructType, typename MemberType>
 		void order_pointer_vector_by_field(std::vector<StructType*>& vec, MemberType StructType::* member, bool asc = true) {
-			std::sort(execution_policy, vec.begin(), vec.end(),
+			std::sort(OPT_EXEC_POLICY vec.begin(), vec.end(),
 				[member, asc](const StructType* a, const StructType* b) {
 					if (asc)
 						return (a->*member) < (b->*member);
@@ -117,7 +125,7 @@ namespace ctrack {
 		template <typename T>
 		size_t countAllEvents(const std::deque<std::vector<T>>& events) {
 			return std::transform_reduce(
-				execution_policy,
+				OPT_EXEC_POLICY
 				events.begin(), events.end(),
 				size_t(0),
 				std::plus<>(),
@@ -393,7 +401,7 @@ namespace ctrack {
 			std::vector<Simple_Event> simple_events{};
 			simple_events.resize(events.size());
 			std::transform(
-				execution_policy,
+				OPT_EXEC_POLICY
 				events.begin(), events.end(),
 				simple_events.begin(),
 				[](const Event& event) {
@@ -409,7 +417,7 @@ namespace ctrack {
 			std::vector<Simple_Event> simple_events{};
 			simple_events.resize(events.size());
 			std::transform(
-				execution_policy,
+				OPT_EXEC_POLICY
 				events.begin(), events.end(),
 				simple_events.begin(),
 				[](const Event* event) {
@@ -482,7 +490,7 @@ namespace ctrack {
 					return;
 
 				auto all_events_simple = create_simple_events(all_events);
-				std::sort(execution_policy, all_events_simple.begin(), all_events_simple.end(), cmp_simple_event_by_duration_asc);
+				std::sort(OPT_EXEC_POLICY all_events_simple.begin(), all_events_simple.end(), cmp_simple_event_by_duration_asc);
 				all_cnt = static_cast<unsigned int> (all_events_simple.size());
 				const double factor = (1.0 / static_cast<double>(all_cnt));
 
@@ -540,19 +548,19 @@ namespace ctrack {
 
 				auto center_child_events_simple = load_child_events_simple(center_events_simple, events_map, child_graph);
 
-				std::sort(execution_policy, center_events_simple.begin(), center_events_simple.end(), cmp_simple_event_by_start_time_asc);
+				std::sort(OPT_EXEC_POLICY center_events_simple.begin(), center_events_simple.end(), cmp_simple_event_by_start_time_asc);
 				center_grouped = sorted_create_grouped_simple_events(center_events_simple);
 				center_time_active = sum_field(center_grouped, &Simple_Event::duration);
 
-				std::sort(execution_policy, center_child_events_simple.begin(), center_child_events_simple.end(), cmp_simple_event_by_start_time_asc);
+				std::sort(OPT_EXEC_POLICY center_child_events_simple.begin(), center_child_events_simple.end(), cmp_simple_event_by_start_time_asc);
 				auto center_child_events_grouped = sorted_create_grouped_simple_events(center_child_events_simple);
 				center_time_active_exclusive = center_time_active - sum_field(center_child_events_grouped, &Simple_Event::duration);
 
-				std::sort(execution_policy, all_events_simple.begin(), all_events_simple.end(), cmp_simple_event_by_start_time_asc);
+				std::sort(OPT_EXEC_POLICY all_events_simple.begin(), all_events_simple.end(), cmp_simple_event_by_start_time_asc);
 				all_grouped = sorted_create_grouped_simple_events(all_events_simple);
 				all_time_active = sum_field(all_grouped, &Simple_Event::duration);
 
-				std::sort(execution_policy, all_child_events_simple.begin(), all_child_events_simple.end(), cmp_simple_event_by_start_time_asc);
+				std::sort(OPT_EXEC_POLICY all_child_events_simple.begin(), all_child_events_simple.end(), cmp_simple_event_by_start_time_asc);
 				auto all_child_events_grouped = sorted_create_grouped_simple_events(all_child_events_simple);
 				all_time_active_exclusive = all_time_active - sum_field(all_child_events_grouped, &Simple_Event::duration);
 			}
@@ -721,7 +729,7 @@ namespace ctrack {
 					}
 				}
 
-				std::sort(execution_policy, grouped_events.begin(), grouped_events.end(), cmp_simple_event_by_start_time_asc);
+				std::sort(OPT_EXEC_POLICY grouped_events.begin(), grouped_events.end(), cmp_simple_event_by_start_time_asc);
 				auto all_grouped = sorted_create_grouped_simple_events(grouped_events);
 				sum_time_active_exclusive = sum_field(all_grouped, &Simple_Event::duration);
 
