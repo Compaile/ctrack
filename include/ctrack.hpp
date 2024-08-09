@@ -30,7 +30,7 @@
 
 #define CTRACK_VERSION_MAJOR 1
 #define CTRACK_VERSION_MINOR 0
-#define CTRACK_VERSION_PATCH 1
+#define CTRACK_VERSION_PATCH 2
 
 // Helper macro to convert a numeric value to a string
 #define STRINGIFY(x) #x
