@@ -7,6 +7,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Option to disable parallel processing
 option(DISABLE_PAR "Disable parallel processing" OFF)
 
+# Option to disable building examples
+option(DISABLE_EXAMPLES "Disable building examples" OFF)
+
 # Check for TBB
 if(NOT MSVC AND NOT DISABLE_PAR)
     find_package(TBB QUIET)
@@ -34,8 +37,12 @@ elseif(NOT MSVC AND TBB_FOUND)
     target_link_libraries(ctrack INTERFACE TBB::tbb)
 endif()
 
-# Add the examples subdirectory
-add_subdirectory(examples)
+# Add the examples subdirectory if not disabled
+if(NOT DISABLE_EXAMPLES)
+    add_subdirectory(examples)
+else()
+    message(STATUS "Building examples disabled.")
+endif()
 
 # Installation
 include(GNUInstallDirs)
