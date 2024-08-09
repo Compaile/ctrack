@@ -190,8 +190,8 @@ To use CTRACK as a CMake package:
 2. In your project's `CMakeLists.txt`, add:
 
    ```cmake
-   find_package(CTRACK REQUIRED)
-   target_link_libraries(your_target PRIVATE CTRACK::CTRACK)
+   find_package(ctrack REQUIRED)
+   target_link_libraries(your_target PRIVATE ctrack::ctrack)
    ```
 
 Note: If you are using a compiler which needs TBB for C++ standard parallel algorithms, you need to link to tbb. 
