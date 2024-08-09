@@ -1,8 +1,24 @@
 cmake_minimum_required(VERSION 3.12)
-project(ctrack VERSION 1.0.0 LANGUAGES CXX)
+project(ctrack VERSION 1.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Option to disable parallel processing
+option(DISABLE_PAR "Disable parallel processing" OFF)
+
+# Check for TBB
+if(NOT MSVC AND NOT DISABLE_PAR)
+    find_package(TBB QUIET)
+    if(TBB_FOUND)
+        message(STATUS "TBB found. Enabling parallel execution.")
+    else()
+        message(STATUS "TBB not found. Disabling parallel execution.")
+        set(DISABLE_PAR ON)
+    endif()
+elseif(DISABLE_PAR)
+    message(STATUS "DISABLE_PAR set. Disabling parallel execution.")
+endif()
 
 # Create the ctrack library
 add_library(ctrack INTERFACE)
@@ -10,6 +26,13 @@ target_include_directories(ctrack INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+
+# Configure ctrack based on TBB availability
+if(DISABLE_PAR)
+    target_compile_definitions(ctrack INTERFACE CTRACK_DISABLE_EXECUTION_POLICY)
+elseif(NOT MSVC AND TBB_FOUND)
+    target_link_libraries(ctrack INTERFACE TBB::tbb)
+endif()
 
 # Add the examples subdirectory
 add_subdirectory(examples)

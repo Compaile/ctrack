@@ -1,3 +1,18 @@
 @PACKAGE_INIT@
 
 include("${CMAKE_CURRENT_LIST_DIR}/ctrackTargets.cmake")
+
+if(NOT MSVC AND NOT CTRACK_DISABLE_EXECUTION_POLICY)
+    include(CMakeFindDependencyMacro)
+    find_dependency(TBB QUIET)
+    if(NOT TBB_FOUND)
+        message(STATUS "TBB not found. Disabling parallel execution for ctrack.")
+        set(CTRACK_DISABLE_EXECUTION_POLICY ON)
+    endif()
+endif()
+
+if(CTRACK_DISABLE_EXECUTION_POLICY)
+    target_compile_definitions(ctrack::ctrack INTERFACE CTRACK_DISABLE_EXECUTION_POLICY)
+endif()
+
+check_required_components(ctrack)
