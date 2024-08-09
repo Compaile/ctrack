@@ -255,11 +255,29 @@ namespace ctrack {
 				stream << "\n";
 			}
 
+			template<typename StreamType>
+			void csvRow(StreamType& stream, const std::vector<std::string>& row) const {
+			  for (size_t i = 0; i < row.size(); ++i) {
+			    stream << row[i];
+			    if (i < row.size() - 1) {
+			      stream << ",";
+			    }
+			  }
+			  stream << "\n";
+			}
+
 		public:
 			BeautifulTable(const std::vector<std::string>& headerColumns, bool enableColor = false, const  ColorScheme& colors = default_colors, const std::vector<std::pair<std::string, int>>& top_header = {})
 				: header(headerColumns), useColor(enableColor), colors(colors), top_header(top_header) {
 				updateColumnWidths(header);
 			}
+
+			enum class ResultFormat {
+				TABLE,
+				CSV,
+				JSON,
+				DB
+			};
 
 			void addRow(const std::vector<std::string>& row) {
 				if (row.size() != header.size()) {
@@ -281,6 +299,17 @@ namespace ctrack {
 				for (const auto& row : rows) {
 					printRow(stream, row, colors.row_color);
 					printHorizontalLine(stream);
+				}
+			}
+
+			template<typename StreamType>
+			void csv(StreamType& stream) const {
+				if (top_header.size() > 0) {
+				// csvRow(stream, top_header);
+				}
+				csvRow(stream, header);
+				for (const auto& row : rows) {
+					csvRow(stream, row);
 				}
 			}
 
@@ -319,7 +348,6 @@ namespace ctrack {
 				// Format the percentage as a string with 2 decimal places
 				std::ostringstream ss;
 				ss << std::fixed << std::setprecision(2) << percentage << "%";
-
 				return ss.str();
 			}
 
@@ -656,26 +684,57 @@ namespace ctrack {
 			};
 
 			template<typename StreamType>
-			void get_summary_table(StreamType& stream, bool use_color = false) {
+			void get_summary(StreamType& stream, bool use_color = false, BeautifulTable::ResultFormat resultFormat = BeautifulTable::ResultFormat::TABLE) {
+				
 				BeautifulTable info({ "Start","End","time total","time ctracked","time ctracked %", }, use_color, alternate_colors);
-				info.addRow({ BeautifulTable::table_timepoint(track_start_time), BeautifulTable::table_timepoint(track_end_time),
-					BeautifulTable::table_time(time_total), BeautifulTable::table_time(sum_time_active_exclusive),
+				info.addRow({
+					BeautifulTable::table_timepoint(track_start_time),
+					BeautifulTable::table_timepoint(track_end_time),
+					BeautifulTable::table_time(time_total),
+					BeautifulTable::table_time(sum_time_active_exclusive),
 					BeautifulTable::table_percentage(sum_time_active_exclusive, time_total)
-					});
+				});
 
-				info.print(stream);
+				switch (resultFormat) {
+				  case BeautifulTable::ResultFormat::TABLE:
+				    info.print(stream);
+				    break;
+				  case BeautifulTable::ResultFormat::CSV:
+				    info.csv(stream);
+				    break;
+				  case BeautifulTable::ResultFormat::JSON:
+				  case BeautifulTable::ResultFormat::DB:
+				  default:
+				    std::cerr << "Invalid choice, DB and JSON not yet supported." << std::endl;
+				    break;
+				}
+
 				BeautifulTable table({ "filename", "function", "line","calls","ae" + center_intervall_str + "%","ae[0-100]%",
-					"time ae[0-100]" ,"time a[0-100]" }, use_color, alternate_colors);
+						"time ae[0-100]" ,"time a[0-100]" }, use_color, alternate_colors);
 				for (auto& entry : sorted_events) {
-					table.addRow({ BeautifulTable::stable_shortenPath(entry->filename), entry->function_name,BeautifulTable::table_string(entry->line),
+					table.addRow({
+						BeautifulTable::stable_shortenPath(entry->filename), entry->function_name,
+						BeautifulTable::table_string(entry->line),
 						BeautifulTable::table_string(entry->all_cnt),
 						BeautifulTable::table_percentage(entry->center_time_active_exclusive, time_total),
-						BeautifulTable::table_percentage(entry->all_time_active_exclusive,time_total),
+						BeautifulTable::table_percentage(entry->all_time_active_exclusive, time_total),
 						BeautifulTable::table_time(entry->all_time_active_exclusive),
 						BeautifulTable::table_time(entry->all_time_active) });
 				}
 
-				table.print(stream);
+				switch (resultFormat) {
+				  case BeautifulTable::ResultFormat::TABLE:
+				    table.print(stream);
+				    break;
+				  case BeautifulTable::ResultFormat::CSV:
+				    table.csv(stream);
+				    break;
+				  case BeautifulTable::ResultFormat::JSON:
+				  case BeautifulTable::ResultFormat::DB:
+				  default:
+				    std::cerr << "Invalid choice, DB and JSON not yet supported." << std::endl;
+				    break;
+				}
 			};
 
 			template<typename StreamType>
@@ -687,21 +746,30 @@ namespace ctrack {
 					auto& entry = sorted_events[i];
 
 					BeautifulTable info({ "filename", "function", "line","time acc","sd","cv","calls","threads" }, use_color, default_colors);
-					info.addRow({ BeautifulTable::stable_shortenPath(entry->filename), entry->function_name,BeautifulTable::table_string(entry->line),
+					info.addRow({
+						BeautifulTable::stable_shortenPath(entry->filename), entry->function_name,
+						BeautifulTable::table_string(entry->line),
 						BeautifulTable::table_time(entry->all_time_acc),
-						BeautifulTable::table_time(sorted_events[i]->all_st),BeautifulTable::table_string(sorted_events[i]->all_cv),
-						BeautifulTable::table_string(sorted_events[i]->all_cnt),	BeautifulTable::table_string(sorted_events[i]->all_thread_cnt) });
+						BeautifulTable::table_time(sorted_events[i]->all_st),
+						BeautifulTable::table_string(sorted_events[i]->all_cv),
+						BeautifulTable::table_string(sorted_events[i]->all_cnt),
+						BeautifulTable::table_string(sorted_events[i]->all_thread_cnt) });
 
 					BeautifulTable table({ "min", "mean", "min","mean","med","time a","time ae","max","mean","max" }, use_color, default_colors,
 						{ {"fastest[0-" + std::to_string(settings.non_center_percent) + "]%",2},{"center" + center_intervall_str + "%",6},
 						{"slowest[" + std::to_string(100 - settings.non_center_percent) + "-100]%",2} });
 
-					table.addRow({ BeautifulTable::table_time(entry->fastest_min),BeautifulTable::table_time(entry->fastest_mean),
-						BeautifulTable::table_time(entry->center_min),BeautifulTable::table_time(entry->center_mean),
-						BeautifulTable::table_time(entry->center_med),BeautifulTable::table_time(entry->center_time_active),
+					table.addRow({
+						BeautifulTable::table_time(entry->fastest_min),
+						BeautifulTable::table_time(entry->fastest_mean),
+						BeautifulTable::table_time(entry->center_min),
+						BeautifulTable::table_time(entry->center_mean),
+						BeautifulTable::table_time(entry->center_med),
+						BeautifulTable::table_time(entry->center_time_active),
 						BeautifulTable::table_time(entry->center_time_active_exclusive),
 						BeautifulTable::table_time(entry->center_max),
-						BeautifulTable::table_time(entry->slowest_mean),BeautifulTable::table_time(entry->slowest_max) });
+						BeautifulTable::table_time(entry->slowest_mean),
+						BeautifulTable::table_time(entry->slowest_max) });
 
 					info.print(stream);
 					table.print(stream);
@@ -930,14 +998,20 @@ namespace ctrack {
 			std::cout << "Details" << std::endl;
 			res.get_detail_table(std::cout, true);
 			std::cout << "Summary" << std::endl;
-			res.get_summary_table(std::cout, true);
+			res.get_summary(std::cout, true);
+		}
+
+		inline void result_csv(ctrack_result_settings settings = {}, const std::filesystem::path& path = std::filesystem::path("result.csv")) {
+			auto res = calc_stats_and_clear(settings);
+			res.get_summary(std::cout, false, BeautifulTable::ResultFormat::CSV);
+			// TODO write to file
 		}
 
 		inline std::string result_as_string(ctrack_result_settings settings = {}) {
 			auto res = calc_stats_and_clear(settings);
 			std::stringstream ss;
 			ss << "Summary\n";
-			res.get_summary_table(ss, false);
+			res.get_summary(ss, false);
 			ss << "Details\n";
 			res.get_detail_table(ss, false, true);
 
