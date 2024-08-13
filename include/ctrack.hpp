@@ -287,6 +287,23 @@ namespace ctrack {
 				updateColumnWidths(row);
 			}
 
+      template<typename StreamType>
+      void output(StreamType& stream, BeautifulTable::ResultFormat resultFormat) const {
+				switch (resultFormat) {
+				  case BeautifulTable::ResultFormat::TABLE:
+				    print(stream);
+				    break;
+				  case BeautifulTable::ResultFormat::CSV:
+				    csv(stream);
+				    break;
+				  case BeautifulTable::ResultFormat::JSON:
+				  case BeautifulTable::ResultFormat::DB:
+				  default:
+				    std::cerr << "Invalid choice, DB and JSON not yet supported." << std::endl;
+				    break;
+				}
+      }
+
 			template<typename StreamType>
 			void print(StreamType& stream) const {
 				if (top_header.size() > 0) {
@@ -320,12 +337,12 @@ namespace ctrack {
 				return oss.str();
 			}
 
-			static inline std::string table_time(uint_fast64_t nanoseconds) {
-				return table_time(static_cast<double>(nanoseconds));
+			static inline std::string table_time(uint_fast64_t nanoseconds, bool add_unit = true) {
+				return table_time(static_cast<double>(nanoseconds), add_unit);
 			}
 
-			static inline std::string table_time(double nanoseconds) {
-				const char* units[] = { "ns", "mcs", "ms", "s" };
+			static inline std::string table_time(double nanoseconds, bool add_unit = true) {
+				constexpr std::string_view units[] = { "ns", "mcs", "ms", "s" };
 				int unit = 0;
 				double value = static_cast<double>(nanoseconds);
 				while (value >= 1000 && unit < 3) {
@@ -333,13 +350,21 @@ namespace ctrack {
 					unit++;
 				}
 				std::ostringstream oss;
-				oss << std::fixed << std::setprecision(2) << value << " " << units[unit];
+				oss << std::fixed << std::setprecision(2) << value;
+
+        if (add_unit) {
+          oss << " " << units[unit];
+        }
 				return oss.str();
 			}
 
-			static inline std::string table_percentage(uint_fast64_t value, uint_fast64_t total) {
-				if (total == 0) {
+			static inline std::string table_percentage(uint_fast64_t value, uint_fast64_t total, bool add_unit = true) {
+				if (total == 0 && add_unit) {
 					return "nan%";
+				}
+
+				if (total == 0 && !add_unit) {
+					return "nan";
 				}
 
 				// Calculate the percentage
@@ -347,7 +372,11 @@ namespace ctrack {
 
 				// Format the percentage as a string with 2 decimal places
 				std::ostringstream ss;
-				ss << std::fixed << std::setprecision(2) << percentage << "%";
+				ss << std::fixed << std::setprecision(2) << percentage;
+
+        if (add_unit) {
+          ss << "%";
+        }
 				return ss.str();
 			}
 
@@ -685,29 +714,19 @@ namespace ctrack {
 
 			template<typename StreamType>
 			void get_summary(StreamType& stream, bool use_color = false, BeautifulTable::ResultFormat resultFormat = BeautifulTable::ResultFormat::TABLE) {
+
+        bool add_unit = resultFormat == BeautifulTable::ResultFormat::TABLE;
 				
 				BeautifulTable info({ "Start","End","time total","time ctracked","time ctracked %", }, use_color, alternate_colors);
 				info.addRow({
 					BeautifulTable::table_timepoint(track_start_time),
 					BeautifulTable::table_timepoint(track_end_time),
-					BeautifulTable::table_time(time_total),
-					BeautifulTable::table_time(sum_time_active_exclusive),
-					BeautifulTable::table_percentage(sum_time_active_exclusive, time_total)
+					BeautifulTable::table_time(time_total, add_unit),
+					BeautifulTable::table_time(sum_time_active_exclusive, add_unit),
+					BeautifulTable::table_percentage(sum_time_active_exclusive, time_total, add_unit)
 				});
 
-				switch (resultFormat) {
-				  case BeautifulTable::ResultFormat::TABLE:
-				    info.print(stream);
-				    break;
-				  case BeautifulTable::ResultFormat::CSV:
-				    info.csv(stream);
-				    break;
-				  case BeautifulTable::ResultFormat::JSON:
-				  case BeautifulTable::ResultFormat::DB:
-				  default:
-				    std::cerr << "Invalid choice, DB and JSON not yet supported." << std::endl;
-				    break;
-				}
+				info.output(stream, resultFormat);
 
 				BeautifulTable table({ "filename", "function", "line","calls","ae" + center_intervall_str + "%","ae[0-100]%",
 						"time ae[0-100]" ,"time a[0-100]" }, use_color, alternate_colors);
@@ -716,29 +735,20 @@ namespace ctrack {
 						BeautifulTable::stable_shortenPath(entry->filename), entry->function_name,
 						BeautifulTable::table_string(entry->line),
 						BeautifulTable::table_string(entry->all_cnt),
-						BeautifulTable::table_percentage(entry->center_time_active_exclusive, time_total),
-						BeautifulTable::table_percentage(entry->all_time_active_exclusive, time_total),
-						BeautifulTable::table_time(entry->all_time_active_exclusive),
-						BeautifulTable::table_time(entry->all_time_active) });
+						BeautifulTable::table_percentage(entry->center_time_active_exclusive, time_total, add_unit),
+						BeautifulTable::table_percentage(entry->all_time_active_exclusive, time_total, add_unit),
+						BeautifulTable::table_time(entry->all_time_active_exclusive, add_unit),
+						BeautifulTable::table_time(entry->all_time_active, add_unit) });
 				}
 
-				switch (resultFormat) {
-				  case BeautifulTable::ResultFormat::TABLE:
-				    table.print(stream);
-				    break;
-				  case BeautifulTable::ResultFormat::CSV:
-				    table.csv(stream);
-				    break;
-				  case BeautifulTable::ResultFormat::JSON:
-				  case BeautifulTable::ResultFormat::DB:
-				  default:
-				    std::cerr << "Invalid choice, DB and JSON not yet supported." << std::endl;
-				    break;
-				}
+				table.output(stream, resultFormat);
 			};
 
 			template<typename StreamType>
-			void get_detail_table(StreamType& stream, bool use_color = false, bool reverse_vector = false) {
+			void get_detail(StreamType& stream, bool use_color = false, bool reverse_vector = false, BeautifulTable::ResultFormat resultFormat = BeautifulTable::ResultFormat::TABLE) {
+
+        bool add_unit = resultFormat == BeautifulTable::ResultFormat::TABLE;
+
 				if (reverse_vector) {
 					std::reverse(sorted_events.begin(), sorted_events.end());
 				}
@@ -749,8 +759,8 @@ namespace ctrack {
 					info.addRow({
 						BeautifulTable::stable_shortenPath(entry->filename), entry->function_name,
 						BeautifulTable::table_string(entry->line),
-						BeautifulTable::table_time(entry->all_time_acc),
-						BeautifulTable::table_time(sorted_events[i]->all_st),
+						BeautifulTable::table_time(entry->all_time_acc, add_unit),
+						BeautifulTable::table_time(sorted_events[i]->all_st, add_unit),
 						BeautifulTable::table_string(sorted_events[i]->all_cv),
 						BeautifulTable::table_string(sorted_events[i]->all_cnt),
 						BeautifulTable::table_string(sorted_events[i]->all_thread_cnt) });
@@ -760,16 +770,16 @@ namespace ctrack {
 						{"slowest[" + std::to_string(100 - settings.non_center_percent) + "-100]%",2} });
 
 					table.addRow({
-						BeautifulTable::table_time(entry->fastest_min),
-						BeautifulTable::table_time(entry->fastest_mean),
-						BeautifulTable::table_time(entry->center_min),
-						BeautifulTable::table_time(entry->center_mean),
-						BeautifulTable::table_time(entry->center_med),
-						BeautifulTable::table_time(entry->center_time_active),
-						BeautifulTable::table_time(entry->center_time_active_exclusive),
-						BeautifulTable::table_time(entry->center_max),
-						BeautifulTable::table_time(entry->slowest_mean),
-						BeautifulTable::table_time(entry->slowest_max) });
+						BeautifulTable::table_time(entry->fastest_min, add_unit),
+						BeautifulTable::table_time(entry->fastest_mean, add_unit),
+						BeautifulTable::table_time(entry->center_min, add_unit),
+						BeautifulTable::table_time(entry->center_mean, add_unit),
+						BeautifulTable::table_time(entry->center_med, add_unit),
+						BeautifulTable::table_time(entry->center_time_active, add_unit),
+						BeautifulTable::table_time(entry->center_time_active_exclusive, add_unit),
+						BeautifulTable::table_time(entry->center_max, add_unit),
+						BeautifulTable::table_time(entry->slowest_mean, add_unit),
+						BeautifulTable::table_time(entry->slowest_max, add_unit) });
 
 					info.print(stream);
 					table.print(stream);
@@ -996,7 +1006,7 @@ namespace ctrack {
 		inline void result_print(ctrack_result_settings settings = {}) {
 			auto res = calc_stats_and_clear(settings);
 			std::cout << "Details" << std::endl;
-			res.get_detail_table(std::cout, true);
+			res.get_detail(std::cout, true);
 			std::cout << "Summary" << std::endl;
 			res.get_summary(std::cout, true);
 		}
@@ -1013,7 +1023,7 @@ namespace ctrack {
 			ss << "Summary\n";
 			res.get_summary(ss, false);
 			ss << "Details\n";
-			res.get_detail_table(ss, false, true);
+			res.get_detail(ss, false, true);
 
 			return ss.str();
 		}
