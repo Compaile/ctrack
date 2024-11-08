@@ -22,7 +22,6 @@
 #endif
 #include <vector>
 #include <iomanip>
-#include <fstream>
 #include <filesystem>
 #include <sstream>
 #include <atomic>
@@ -211,7 +210,7 @@ namespace ctrack {
 						stream << std::string(leftPadding + 1, ' ') << row[i] << std::string(rightPadding + 1, ' ');
 					}
 					else {
-						stream << " " << std::setw(columnWidths[i]) << std::right << row[i] << " ";
+						stream << " " << std::setw(static_cast<int32_t>(columnWidths[i])) << std::right << row[i] << " ";
 					}
 					if (useColor) stream << RESET_COLOR << colors.border_color;
 					stream << "|";
@@ -257,7 +256,7 @@ namespace ctrack {
 
 		public:
 			BeautifulTable(const std::vector<std::string>& headerColumns, bool enableColor = false, const  ColorScheme& colors = default_colors, const std::vector<std::pair<std::string, int>>& top_header = {})
-				: header(headerColumns), useColor(enableColor), colors(colors), top_header(top_header) {
+				: top_header(top_header), header(headerColumns), useColor(enableColor), colors(colors) {
 				updateColumnWidths(header);
 			}
 
@@ -368,7 +367,7 @@ namespace ctrack {
 			std::string_view function;
 			unsigned int event_id;
 			Event(const std::chrono::high_resolution_clock::time_point& start_time, const std::chrono::high_resolution_clock::time_point& end_time, const std::string_view filename, const  int line, const std::string_view function, const int thread_id, const unsigned int event_id)
-				: start_time(start_time), end_time(end_time), filename(filename), line(line), function(function), thread_id(thread_id), event_id(event_id)
+				: start_time(start_time), end_time(end_time), line(line), thread_id(thread_id), filename(filename), function(function), event_id(event_id)
 			{}
 		};
 
@@ -377,8 +376,8 @@ namespace ctrack {
 			std::chrono::high_resolution_clock::time_point start_time{};
 			int_fast64_t unique_id = 0;
 			std::chrono::high_resolution_clock::time_point end_time{};
-			Simple_Event(const std::chrono::high_resolution_clock::time_point& start_time, const std::chrono::high_resolution_clock::time_point& end_time, const uint_fast64_t duration, const int_fast64_t unique_id) :start_time(start_time), end_time(end_time), duration(duration), unique_id(unique_id) {}
-			Simple_Event() {};
+			Simple_Event(const std::chrono::high_resolution_clock::time_point& start_time, const std::chrono::high_resolution_clock::time_point& end_time, const uint_fast64_t duration, const int_fast64_t unique_id) :duration(duration), start_time(start_time), unique_id(unique_id), end_time(end_time) {}
+			Simple_Event() {}
 		};
 
 		inline bool cmp_simple_event_by_duration_asc(const Simple_Event& a, const Simple_Event& b)
@@ -438,7 +437,7 @@ namespace ctrack {
 			result.push_back(events[0]);
 			unsigned int current_idx = 0;
 
-			for (int i = 1; i < events.size(); i++) {
+			for (size_t i = 1; i < events.size(); i++) {
 				if (result[current_idx].end_time >= events[i].start_time) {
 					result[current_idx].end_time = std::max<std::chrono::high_resolution_clock::time_point>(result[current_idx].end_time, events[i].end_time);
 				}
@@ -653,7 +652,7 @@ namespace ctrack {
 				time_total = std::chrono::duration_cast<std::chrono::nanoseconds>(
 					track_end_time - track_start_time).count();
 				center_intervall_str = "[" + std::to_string(settings.non_center_percent) + "-" + std::to_string(100 - settings.non_center_percent) + "]";
-			};
+			}
 
 			template<typename StreamType>
 			void get_summary_table(StreamType& stream, bool use_color = false) {
@@ -676,7 +675,7 @@ namespace ctrack {
 				}
 
 				table.print(stream);
-			};
+			}
 
 			template<typename StreamType>
 			void get_detail_table(StreamType& stream, bool use_color = false, bool reverse_vector = false) {
@@ -749,23 +748,23 @@ namespace ctrack {
 
 			void reserve_a_events(size_t size) {
 				a_events.reserve(size);
-			};
+			}
 
 			inline void add_event(const std::string_view& filename, const std::string_view function, const int line, const Event& e) {
 				f_res[filename][function][line].all_events.push_back(e);
 				a_events.insert({ get_unique_event_id(e.thread_id, e.event_id), e });
 			}
 
-			void add_sub_events(const sub_events& s_events, const unsigned int thread_id) {
+			void add_sub_events(const sub_events& s_events, const unsigned int thread_id_) {
 
 				for (auto const& [key, val] : s_events)
 				{
-					int_fast64_t parent_id = get_unique_event_id(thread_id, key);
+					int_fast64_t parent_id = get_unique_event_id(thread_id_, key);
 					for (const auto& child : val) {
-						child_graph[parent_id].push_back(get_unique_event_id(thread_id, child));
+						child_graph[parent_id].push_back(get_unique_event_id(thread_id_, child));
 					}
 				}
-			};
+			}
 
 			std::unordered_map < int_fast64_t, Event> a_events{};
 			filename_result f_res{};
@@ -826,7 +825,7 @@ namespace ctrack {
 				while (store::write_events_locked) {}
 
 				register_event();
-			};
+			}
 			~EventHandler() {
 				auto end_time = std::chrono::high_resolution_clock::now();
 				while (store::write_events_locked) {}
@@ -846,7 +845,7 @@ namespace ctrack {
 					if ((*sub_events_ptr)[previous_event_id].capacity() - (*sub_events_ptr)[previous_event_id].size() < 1) (*sub_events_ptr)[previous_event_id].reserve((*sub_events_ptr)[previous_event_id].capacity() * 4);
 					(*sub_events_ptr)[previous_event_id].push_back(event_id);
 				}
-			};
+			}
 		private:
 			void register_event() {
 				t_id = fetch_event_t_id();
@@ -903,10 +902,10 @@ namespace ctrack {
 				auto all_events_cnt = countAllEvents(store::a_events);
 				res.reserve_a_events(all_events_cnt);
 
-				for (int thread_id = 0; thread_id <= store::thread_cnt; thread_id++) {
-					auto& t_events_entry = store::a_events[thread_id];
-					auto& t_sub_events = store::a_sub_events[thread_id];
-					res.add_sub_events(t_sub_events, thread_id);
+				for (int thread_id_ = 0; thread_id_ <= store::thread_cnt; thread_id_++) {
+					auto& t_events_entry = store::a_events[thread_id_];
+					auto& t_sub_events = store::a_sub_events[thread_id_];
+					res.add_sub_events(t_sub_events, thread_id_);
 
 					for (const auto& c_event : t_events_entry)
 					{
