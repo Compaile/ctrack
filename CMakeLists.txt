@@ -10,6 +10,8 @@ option(DISABLE_PAR "Disable parallel processing" OFF)
 # Option to disable building examples
 option(DISABLE_EXAMPLES "Disable building examples" OFF)
 
+option(ENABLE_WARNINGS "Enable warnings" OFF)
+
 # Check for TBB
 if(NOT MSVC AND NOT DISABLE_PAR)
     find_package(TBB QUIET)
@@ -25,7 +27,7 @@ endif()
 
 # Create the ctrack library
 add_library(ctrack INTERFACE)
-target_include_directories(ctrack INTERFACE 
+target_include_directories(ctrack INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
@@ -35,6 +37,14 @@ if(DISABLE_PAR)
     target_compile_definitions(ctrack INTERFACE CTRACK_DISABLE_EXECUTION_POLICY)
 elseif(NOT MSVC AND TBB_FOUND)
     target_link_libraries(ctrack INTERFACE TBB::tbb)
+endif()
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(ENABLE_WARNINGS)
+    if (NOT MSVC)
+        include(cmake/add_warning.cmake)
+        include(cmake/warnings.cmake)
+    endif()
 endif()
 
 # Add the examples subdirectory if not disabled
