@@ -7,6 +7,7 @@
 
 #include <string>
 #include <iostream>
+#include <iterator>
 #include <thread>
 #include <chrono>
 #include <mutex>
