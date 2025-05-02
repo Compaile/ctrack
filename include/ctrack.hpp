@@ -819,13 +819,14 @@ namespace ctrack {
 			EventHandler(int line = __builtin_LINE(), const char* filename = __builtin_FILE(), const char* function = __builtin_FUNCTION(), std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now()) : line(line)
 
 			{
-				this->start_time = start_time;
+		
 				previous_store_clear_cnt = store::store_clear_cnt;
 				this->filename = filename;
 				this->function = function;
 				while (store::write_events_locked) {}
 
 				register_event();
+				this->start_time = start_time;
 			}
 			~EventHandler() {
 				auto end_time = std::chrono::high_resolution_clock::now();
