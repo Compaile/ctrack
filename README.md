@@ -329,6 +329,94 @@ Found a bug? We want to hear about it! Please open an issue on our GitHub reposi
 ### Feature Requests
 Have an idea for a new feature? Feel free to open an issue to discuss it. We're always looking for ways to make CTRACK more useful.
 
+## Developer Guide
+
+### Performance Benchmarking
+
+CTRACK includes a comprehensive benchmark suite to measure and track library performance across different platforms and configurations. This benchmark is essential for:
+
+- Detecting performance regressions
+- Validating optimization improvements
+- Understanding CTRACK's overhead characteristics
+- Ensuring consistent behavior across platforms
+
+#### Building the Benchmark
+
+The benchmark is not built by default. To enable it:
+
+```bash
+mkdir build && cd build
+cmake .. -DBUILD_BENCHMARK=ON
+cmake --build .
+```
+
+#### Running the Benchmark
+
+The benchmark executable will be located at `build/benchmark/ctrack_benchmark`.
+
+Basic usage:
+```bash
+# Run with default settings (50 million events)
+./ctrack_benchmark
+
+# Run with custom event count and thread count
+./ctrack_benchmark --events 10000000 --threads 8
+
+# Enable verbose output
+./ctrack_benchmark --verbose
+```
+
+#### Benchmark Metrics
+
+The benchmark measures four key areas:
+
+1. **Accuracy**: Validates that CTRACK correctly records function execution times by comparing against known timing patterns.
+
+2. **Overhead**: Measures the performance impact of CTRACK instrumentation by comparing execution times with and without tracking enabled.
+
+3. **Memory Usage**: Calculates the memory consumption per tracked event, helping understand scalability limits.
+
+4. **Calculation Time**: Measures how long it takes to process recorded events and generate results.
+
+#### Baseline Comparison
+
+The benchmark supports baseline recording and comparison, which is crucial for tracking performance changes over time:
+
+```bash
+# Record a baseline
+./ctrack_benchmark --record-baseline
+
+# Compare current performance against baseline
+./ctrack_benchmark --compare-baseline
+
+# Use a custom baseline file
+./ctrack_benchmark --baseline my_baseline.json --record-baseline
+```
+
+The baseline comparison will show:
+- 🟢 Green indicators for improvements
+- 🔴 Red indicators for regressions
+- Percentage changes for each metric
+
+#### Best Practices for Benchmarking
+
+1. **Consistent Environment**: Run benchmarks on the same hardware and with minimal background processes for reliable comparisons.
+
+2. **Multiple Runs**: Consider running the benchmark multiple times and averaging results to account for system variability.
+
+3. **Platform-Specific Baselines**: Maintain separate baselines for different platforms (Linux, Windows, macOS) as performance characteristics may vary.
+
+4. **CI Integration**: Consider integrating the benchmark into your CI pipeline to automatically detect performance regressions.
+
+5. **Release Validation**: Always run the benchmark before releases to ensure performance hasn't degraded.
+
+#### Interpreting Results
+
+- **Accuracy**: Should remain consistent (typically around 5% error due to timing precision limits)
+- **Overhead**: Lower is better; typical values range from 50-150% depending on the workload
+- **Memory/Event**: Should remain relatively constant; increases might indicate memory leaks
+- **Calculation Time**: Should scale linearly with event count; non-linear scaling indicates algorithmic issues
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

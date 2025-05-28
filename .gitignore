@@ -51,3 +51,6 @@ Makefile
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Local documentation
+CLAUDE.local.md
