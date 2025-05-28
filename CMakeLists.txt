@@ -10,6 +10,9 @@ option(DISABLE_PAR "Disable parallel processing" OFF)
 # Option to disable building examples
 option(DISABLE_EXAMPLES "Disable building examples" OFF)
 
+# Option to build benchmark (default OFF)
+option(BUILD_BENCHMARK "Build benchmark" OFF)
+
 option(ENABLE_WARNINGS "Enable warnings" OFF)
 
 # Check for TBB
@@ -52,6 +55,14 @@ if(NOT DISABLE_EXAMPLES)
     add_subdirectory(examples)
 else()
     message(STATUS "Building examples disabled.")
+endif()
+
+# Add the benchmark subdirectory if enabled
+if(BUILD_BENCHMARK)
+    add_subdirectory(benchmark)
+    message(STATUS "Building benchmark enabled.")
+else()
+    message(STATUS "Building benchmark disabled.")
 endif()
 
 # Installation
