@@ -816,10 +816,21 @@ namespace ctrack {
 
 		class EventHandler {
 		public:
-			EventHandler(int line = __builtin_LINE(), const char* filename = __builtin_FILE(), const char* function = __builtin_FUNCTION(), std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now()) : line(line)
-
+			// Constructor without start_time parameter - captures time after bookkeeping
+			EventHandler(int line, const char* filename, const char* function) : line(line)
 			{
-		
+				previous_store_clear_cnt = store::store_clear_cnt;
+				this->filename = filename;
+				this->function = function;
+				while (store::write_events_locked) {}
+
+				register_event();
+				this->start_time = std::chrono::high_resolution_clock::now();
+			}
+			
+			// Constructor with explicit start_time parameter - for compatibility
+			EventHandler(int line, const char* filename, const char* function, std::chrono::high_resolution_clock::time_point start_time) : line(line)
+			{
 				previous_store_clear_cnt = store::store_clear_cnt;
 				this->filename = filename;
 				this->function = function;
