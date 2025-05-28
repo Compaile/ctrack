@@ -35,8 +35,10 @@ struct BenchmarkConfig {
 struct BaselineData {
     double accuracy_error_percent;
     double overhead_percent;
+    double overhead_ms;
     double memory_bytes_per_event;
     double calculation_time_ms;
+    double peak_calc_memory_mb;
     size_t total_events;
     size_t thread_count;
     std::string timestamp;
@@ -200,7 +202,7 @@ double measure_accuracy() {
 }
 
 // Measure overhead by comparing with and without CTRACK
-double measure_overhead() {
+std::pair<double, double> measure_overhead() {
     std::cout << "\n=== Measuring Overhead ===" << std::endl;
     
     const size_t overhead_events = 1'000'000; // 1M events for overhead test
@@ -248,18 +250,19 @@ double measure_overhead() {
     auto duration_track = std::chrono::duration_cast<std::chrono::microseconds>(end_track - start_track).count();
     
     double overhead_percent = ((double)(duration_track - duration_no_track) / duration_no_track) * 100.0;
+    double overhead_ms = (duration_track - duration_no_track) / 1000.0; // Convert microseconds to milliseconds
     
     if (g_config.verbose) {
         std::cout << "Without CTRACK: " << duration_no_track << " µs" << std::endl;
         std::cout << "With CTRACK: " << duration_track << " µs" << std::endl;
-        std::cout << "Overhead: " << overhead_percent << "%" << std::endl;
+        std::cout << "Overhead: " << overhead_percent << "% (" << overhead_ms << " ms)" << std::endl;
     }
     
-    return overhead_percent;
+    return {overhead_percent, overhead_ms};
 }
 
 // Measure memory usage and calculation time
-std::pair<double, double> measure_memory_and_calculation_time() {
+std::tuple<double, double, double> measure_memory_and_calculation_time() {
     std::cout << "\n=== Measuring Memory Usage and Calculation Time ===" << std::endl;
     
     // Clear any previous tracking data by getting and discarding results
@@ -305,18 +308,38 @@ std::pair<double, double> measure_memory_and_calculation_time() {
         std::cout << "Memory per event: " << bytes_per_event << " bytes" << std::endl;
     }
     
-    // Measure calculation time
+    // Measure calculation time and peak memory usage
+    std::atomic<bool> monitoring{true};
+    std::atomic<size_t> peak_memory{post_event_memory};
+    
+    // Start memory monitoring thread
+    std::thread monitor_thread([&monitoring, &peak_memory, initial_memory]() {
+        while (monitoring.load()) {
+            size_t current_memory = get_memory_usage();
+            size_t current_peak = peak_memory.load();
+            while (current_memory > current_peak && 
+                   !peak_memory.compare_exchange_weak(current_peak, current_memory)) {}
+            std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Poll every 10ms
+        }
+    });
+    
     auto calc_start = std::chrono::high_resolution_clock::now();
     auto results = ctrack::result_as_string();
     auto calc_end = std::chrono::high_resolution_clock::now();
     
+    // Stop monitoring
+    monitoring = false;
+    monitor_thread.join();
+    
     auto calc_duration = std::chrono::duration_cast<std::chrono::microseconds>(calc_end - calc_start).count() / 1000.0;
+    double peak_calc_memory_mb = (peak_memory.load() - initial_memory) / (1024.0 * 1024.0);
     
     if (g_config.verbose) {
         std::cout << "Result calculation took: " << calc_duration << " ms" << std::endl;
+        std::cout << "Peak memory during calculation: " << peak_calc_memory_mb << " MB" << std::endl;
     }
     
-    return {bytes_per_event, calc_duration};
+    return {bytes_per_event, calc_duration, peak_calc_memory_mb};
 }
 
 // Save baseline to file
@@ -331,8 +354,10 @@ void save_baseline(const BaselineData& data) {
     file << "{\n";
     file << "  \"accuracy_error_percent\": " << data.accuracy_error_percent << ",\n";
     file << "  \"overhead_percent\": " << data.overhead_percent << ",\n";
+    file << "  \"overhead_ms\": " << data.overhead_ms << ",\n";
     file << "  \"memory_bytes_per_event\": " << data.memory_bytes_per_event << ",\n";
     file << "  \"calculation_time_ms\": " << data.calculation_time_ms << ",\n";
+    file << "  \"peak_calc_memory_mb\": " << data.peak_calc_memory_mb << ",\n";
     file << "  \"total_events\": " << data.total_events << ",\n";
     file << "  \"thread_count\": " << data.thread_count << ",\n";
     file << "  \"timestamp\": \"" << data.timestamp << "\",\n";
@@ -356,10 +381,14 @@ bool load_baseline(BaselineData& data) {
             sscanf(line.c_str(), "  \"accuracy_error_percent\": %lf,", &data.accuracy_error_percent);
         } else if (line.find("\"overhead_percent\":") != std::string::npos) {
             sscanf(line.c_str(), "  \"overhead_percent\": %lf,", &data.overhead_percent);
+        } else if (line.find("\"overhead_ms\":") != std::string::npos) {
+            sscanf(line.c_str(), "  \"overhead_ms\": %lf,", &data.overhead_ms);
         } else if (line.find("\"memory_bytes_per_event\":") != std::string::npos) {
             sscanf(line.c_str(), "  \"memory_bytes_per_event\": %lf,", &data.memory_bytes_per_event);
         } else if (line.find("\"calculation_time_ms\":") != std::string::npos) {
             sscanf(line.c_str(), "  \"calculation_time_ms\": %lf,", &data.calculation_time_ms);
+        } else if (line.find("\"peak_calc_memory_mb\":") != std::string::npos) {
+            sscanf(line.c_str(), "  \"peak_calc_memory_mb\": %lf,", &data.peak_calc_memory_mb);
         } else if (line.find("\"total_events\":") != std::string::npos) {
             sscanf(line.c_str(), "  \"total_events\": %zu,", &data.total_events);
         } else if (line.find("\"thread_count\":") != std::string::npos) {
@@ -396,8 +425,10 @@ void compare_with_baseline(const BaselineData& current) {
     
     print_comparison("Accuracy Error %", baseline.accuracy_error_percent, current.accuracy_error_percent);
     print_comparison("Overhead %", baseline.overhead_percent, current.overhead_percent);
+    print_comparison("Overhead Time (ms)", baseline.overhead_ms, current.overhead_ms);
     print_comparison("Memory/Event (bytes)", baseline.memory_bytes_per_event, current.memory_bytes_per_event);
     print_comparison("Calculation Time (ms)", baseline.calculation_time_ms, current.calculation_time_ms);
+    print_comparison("Peak Calc Memory (MB)", baseline.peak_calc_memory_mb, current.peak_calc_memory_mb);
 }
 
 // Get platform string
@@ -478,15 +509,17 @@ int main(int argc, char* argv[]) {
     
     // Run benchmarks
     double accuracy_error = measure_accuracy();
-    double overhead_percent = measure_overhead();
-    auto [bytes_per_event, calc_time] = measure_memory_and_calculation_time();
+    auto [overhead_percent, overhead_ms] = measure_overhead();
+    auto [bytes_per_event, calc_time, peak_calc_memory] = measure_memory_and_calculation_time();
     
     // Prepare results
     BaselineData current_data = {
         .accuracy_error_percent = accuracy_error,
         .overhead_percent = overhead_percent,
+        .overhead_ms = overhead_ms,
         .memory_bytes_per_event = bytes_per_event,
         .calculation_time_ms = calc_time,
+        .peak_calc_memory_mb = peak_calc_memory,
         .total_events = g_config.total_events,
         .thread_count = g_config.thread_count,
         .timestamp = get_timestamp(),
@@ -497,9 +530,10 @@ int main(int argc, char* argv[]) {
     std::cout << "\n=== Benchmark Results ===" << std::endl;
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "Accuracy error: " << accuracy_error << "%" << std::endl;
-    std::cout << "Overhead: " << overhead_percent << "%" << std::endl;
+    std::cout << "Overhead: " << overhead_percent << "% (" << overhead_ms << " ms)" << std::endl;
     std::cout << "Memory per event: " << bytes_per_event << " bytes" << std::endl;
     std::cout << "Calculation time: " << calc_time << " ms" << std::endl;
+    std::cout << "Peak calculation memory: " << peak_calc_memory << " MB" << std::endl;
     
     // Handle baseline operations
     if (g_config.record_baseline) {
