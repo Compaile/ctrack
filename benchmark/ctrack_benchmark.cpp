@@ -34,6 +34,7 @@ struct BenchmarkConfig {
 // Baseline data structure
 struct BaselineData {
     double accuracy_error_percent;
+    double accuracy_error_ms_per_event;
     double overhead_percent;
     double overhead_ms;
     double overhead_ns_per_event;
@@ -168,8 +169,68 @@ void benchmark_worker_no_track(size_t events_per_thread, std::atomic<bool>& star
     }
 }
 
+// Parse timing from CTRACK results string for a specific function
+double parse_function_timing(const std::string& results, const std::string& function_name) {
+    // Look for the Details section first
+    size_t details_pos = results.find("Details");
+    if (details_pos == std::string::npos) {
+        return -1.0; // Details section not found
+    }
+    
+    // Look for the function name after the Details section
+    size_t func_pos = results.find(function_name, details_pos);
+    if (func_pos == std::string::npos) {
+        return -1.0; // Function not found in Details section
+    }
+    
+    // Find the line containing this function in the Details section
+    size_t line_start = results.rfind('\n', func_pos);
+    if (line_start == std::string::npos) line_start = details_pos;
+    else line_start++; // Skip the newline
+    
+    size_t line_end = results.find('\n', func_pos);
+    if (line_end == std::string::npos) line_end = results.length();
+    
+    std::string line = results.substr(line_start, line_end - line_start);
+    
+    // Look for the "time acc" column value (4th column after filename, function, line)
+    // Split by | and find the 4th field
+    std::vector<std::string> fields;
+    std::istringstream iss(line);
+    std::string field;
+    
+    while (std::getline(iss, field, '|')) {
+        // Trim whitespace
+        field.erase(0, field.find_first_not_of(" \t"));
+        field.erase(field.find_last_not_of(" \t") + 1);
+        if (!field.empty()) {
+            fields.push_back(field);
+        }
+    }
+    
+    // The time acc should be in the 4th field (0-indexed: filename=0, function=1, line=2, time_acc=3)
+    if (fields.size() > 3) {
+        std::string time_acc = fields[3];
+        
+        // Parse value and unit from time_acc (e.g., "2.09 ms")
+        std::istringstream time_iss(time_acc);
+        double value;
+        std::string unit;
+        
+        if (time_iss >> value >> unit) {
+            // Convert to nanoseconds based on unit
+            if (unit == "s") return value * 1e9;
+            else if (unit == "ms") return value * 1e6;
+            else if (unit == "mcs") return value * 1e3;
+            else if (unit == "ns") return value;
+        }
+    }
+    
+    return -1.0; // Could not parse
+}
+
 // Measure accuracy by comparing known timings with CTRACK measurements
-double measure_accuracy() {
+std::pair<double, double> measure_accuracy() {
     std::cout << "\n=== Measuring Accuracy ===" << std::endl;
     
     // Clear any previous tracking data by getting and discarding results
@@ -184,22 +245,75 @@ double measure_accuracy() {
     // Get results
     auto results = ctrack::result_as_string();
     
-    // Parse results to extract timing information
-    // Expected timings per call:
-    // leaf_function: 1000ns * 2 calls = 2000ns
-    // level_3_function: 500ns + 2000ns = 2500ns
-    // level_2_function: 300ns + 10 * 2500ns = 25,300ns
-    // level_1_function: 200ns + 25,300ns = 25,500ns
+    // Expected timings per iteration (in nanoseconds):
+    // leaf_function: 1000ns (called 20 times per iteration) = 20,000ns total per iteration
+    // level_3_function: 500ns + 2*1000ns = 2500ns (called 10 times per iteration) = 25,000ns total per iteration  
+    // level_2_function: 300ns + 10*2500ns = 25,300ns (called 1 time per iteration) = 25,300ns total per iteration
+    // level_1_function: 200ns + 25,300ns = 25,500ns (called 1 time per iteration) = 25,500ns total per iteration
     
-    // This is a simplified accuracy check
-    // In reality, we'd parse the results string and compare actual vs expected
-    double error_percent = 5.0; // Placeholder - would calculate actual error
+    struct ExpectedTiming {
+        std::string name;
+        double expected_total_ns;
+        int call_count;
+    };
+    
+    std::vector<ExpectedTiming> expected_timings = {
+        {"leaf_function", 1000.0 * 20 * test_iterations, 20 * test_iterations},
+        {"level_3_function", 2500.0 * 10 * test_iterations, 10 * test_iterations},
+        {"level_2_function", 25300.0 * 1 * test_iterations, 1 * test_iterations},
+        {"level_1_function", 25500.0 * 1 * test_iterations, 1 * test_iterations}
+    };
+    
+    double total_expected_time = 0.0;
+    double total_actual_time = 0.0;
+    double max_absolute_error = 0.0;
     
     if (g_config.verbose) {
-        std::cout << "Accuracy error: " << error_percent << "%" << std::endl;
+        std::cout << "Function accuracy analysis:" << std::endl;
     }
     
-    return error_percent;
+    for (const auto& timing : expected_timings) {
+        double actual_ns = parse_function_timing(results, timing.name);
+        if (actual_ns > 0) {
+            double expected_ns = timing.expected_total_ns;
+            double absolute_error = std::abs(actual_ns - expected_ns);
+            double percent_error = (absolute_error / expected_ns) * 100.0;
+            
+            total_expected_time += expected_ns;
+            total_actual_time += actual_ns;
+            max_absolute_error = std::max(max_absolute_error, absolute_error);
+            
+            if (g_config.verbose) {
+                std::cout << "  " << timing.name << ": expected " << expected_ns/1e6 << " ms, got " 
+                         << actual_ns/1e6 << " ms (error: " << percent_error << "%)" << std::endl;
+            }
+        } else if (g_config.verbose) {
+            std::cout << "  " << timing.name << ": could not parse timing" << std::endl;
+        }
+    }
+    
+    double overall_error_percent = 0.0;
+    double overall_error_ms = 0.0;
+    
+    if (total_expected_time > 0) {
+        double total_absolute_error = std::abs(total_actual_time - total_expected_time);
+        overall_error_percent = (total_absolute_error / total_expected_time) * 100.0;
+        
+        // Calculate total number of events across all functions
+        double total_events = 0;
+        for (const auto& timing : expected_timings) {
+            total_events += timing.call_count;
+        }
+        
+        // Convert to milliseconds per event
+        overall_error_ms = (total_absolute_error / 1e6) / total_events; // Convert to milliseconds per event
+    }
+    
+    if (g_config.verbose) {
+        std::cout << "Overall accuracy error: " << overall_error_percent << "% (" << overall_error_ms << " ms per event)" << std::endl;
+    }
+    
+    return {overall_error_percent, overall_error_ms};
 }
 
 // Measure overhead by comparing with and without CTRACK
@@ -356,6 +470,7 @@ void save_baseline(const BaselineData& data) {
     // Simple JSON format
     file << "{\n";
     file << "  \"accuracy_error_percent\": " << data.accuracy_error_percent << ",\n";
+    file << "  \"accuracy_error_ms_per_event\": " << data.accuracy_error_ms_per_event << ",\n";
     file << "  \"overhead_percent\": " << data.overhead_percent << ",\n";
     file << "  \"overhead_ms\": " << data.overhead_ms << ",\n";
     file << "  \"overhead_ns_per_event\": " << data.overhead_ns_per_event << ",\n";
@@ -383,6 +498,8 @@ bool load_baseline(BaselineData& data) {
     while (std::getline(file, line)) {
         if (line.find("\"accuracy_error_percent\":") != std::string::npos) {
             sscanf(line.c_str(), "  \"accuracy_error_percent\": %lf,", &data.accuracy_error_percent);
+        } else if (line.find("\"accuracy_error_ms_per_event\":") != std::string::npos) {
+            sscanf(line.c_str(), "  \"accuracy_error_ms_per_event\": %lf,", &data.accuracy_error_ms_per_event);
         } else if (line.find("\"overhead_percent\":") != std::string::npos) {
             sscanf(line.c_str(), "  \"overhead_percent\": %lf,", &data.overhead_percent);
         } else if (line.find("\"overhead_ms\":") != std::string::npos) {
@@ -430,6 +547,7 @@ void compare_with_baseline(const BaselineData& current) {
     };
     
     print_comparison("Accuracy Error %", baseline.accuracy_error_percent, current.accuracy_error_percent);
+    print_comparison("Accuracy Error (ms/event)", baseline.accuracy_error_ms_per_event, current.accuracy_error_ms_per_event);
     print_comparison("Overhead %", baseline.overhead_percent, current.overhead_percent);
     print_comparison("Overhead Time (ms)", baseline.overhead_ms, current.overhead_ms);
     print_comparison("Overhead per Event (ns)", baseline.overhead_ns_per_event, current.overhead_ns_per_event);
@@ -515,13 +633,14 @@ int main(int argc, char* argv[]) {
     std::cout << "Events per thread: " << g_config.total_events / g_config.thread_count << "\n";
     
     // Run benchmarks
-    double accuracy_error = measure_accuracy();
+    auto [accuracy_error_percent, accuracy_error_ms_per_event] = measure_accuracy();
     auto [overhead_percent, overhead_ms, overhead_ns_per_event] = measure_overhead();
     auto [bytes_per_event, calc_time, peak_calc_memory] = measure_memory_and_calculation_time();
     
     // Prepare results
     BaselineData current_data = {
-        .accuracy_error_percent = accuracy_error,
+        .accuracy_error_percent = accuracy_error_percent,
+        .accuracy_error_ms_per_event = accuracy_error_ms_per_event,
         .overhead_percent = overhead_percent,
         .overhead_ms = overhead_ms,
         .overhead_ns_per_event = overhead_ns_per_event,
@@ -537,7 +656,7 @@ int main(int argc, char* argv[]) {
     // Print summary
     std::cout << "\n=== Benchmark Results ===" << std::endl;
     std::cout << std::fixed << std::setprecision(2);
-    std::cout << "Accuracy error: " << accuracy_error << "%" << std::endl;
+    std::cout << "Accuracy error: " << accuracy_error_percent << "% (" << accuracy_error_ms_per_event << " ms per event)" << std::endl;
     std::cout << "Overhead: " << overhead_percent << "% (" << overhead_ms << " ms total, " 
               << overhead_ns_per_event << " ns per event)" << std::endl;
     std::cout << "Memory per event: " << bytes_per_event << " bytes" << std::endl;
