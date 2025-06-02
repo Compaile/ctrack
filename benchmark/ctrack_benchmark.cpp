@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <cstring>
+#include <cstdio>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -281,7 +282,7 @@ std::pair<double, double> measure_accuracy() {
             
             total_expected_time += expected_ns;
             total_actual_time += actual_ns;
-            max_absolute_error = std::max(max_absolute_error, absolute_error);
+            max_absolute_error = (std::max)(max_absolute_error, absolute_error);
             
             if (g_config.verbose) {
                 std::cout << "  " << timing.name << ": expected " << expected_ns/1e6 << " ms, got " 
@@ -497,25 +498,45 @@ bool load_baseline(BaselineData& data) {
     std::string line;
     while (std::getline(file, line)) {
         if (line.find("\"accuracy_error_percent\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"accuracy_error_percent\": %lf,", &data.accuracy_error_percent);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.accuracy_error_percent = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"accuracy_error_ms_per_event\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"accuracy_error_ms_per_event\": %lf,", &data.accuracy_error_ms_per_event);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.accuracy_error_ms_per_event = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"overhead_percent\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"overhead_percent\": %lf,", &data.overhead_percent);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.overhead_percent = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"overhead_ms\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"overhead_ms\": %lf,", &data.overhead_ms);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.overhead_ms = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"overhead_ns_per_event\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"overhead_ns_per_event\": %lf,", &data.overhead_ns_per_event);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.overhead_ns_per_event = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"memory_bytes_per_event\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"memory_bytes_per_event\": %lf,", &data.memory_bytes_per_event);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.memory_bytes_per_event = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"calculation_time_ms\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"calculation_time_ms\": %lf,", &data.calculation_time_ms);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.calculation_time_ms = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"peak_calc_memory_mb\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"peak_calc_memory_mb\": %lf,", &data.peak_calc_memory_mb);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.peak_calc_memory_mb = std::stod(line.substr(pos, end - pos));
         } else if (line.find("\"total_events\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"total_events\": %zu,", &data.total_events);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.total_events = std::stoull(line.substr(pos, end - pos));
         } else if (line.find("\"thread_count\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"thread_count\": %zu,", &data.thread_count);
+            size_t pos = line.find(": ") + 2;
+            size_t end = line.find(",", pos);
+            data.thread_count = std::stoull(line.substr(pos, end - pos));
         }
     }
     
@@ -574,7 +595,13 @@ std::string get_timestamp() {
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
+#ifdef _WIN32
+    struct tm time_info;
+    localtime_s(&time_info, &time_t);
+    ss << std::put_time(&time_info, "%Y-%m-%d %H:%M:%S");
+#else
     ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+#endif
     return ss.str();
 }
 
@@ -638,20 +665,19 @@ int main(int argc, char* argv[]) {
     auto [bytes_per_event, calc_time, peak_calc_memory] = measure_memory_and_calculation_time();
     
     // Prepare results
-    BaselineData current_data = {
-        .accuracy_error_percent = accuracy_error_percent,
-        .accuracy_error_ms_per_event = accuracy_error_ms_per_event,
-        .overhead_percent = overhead_percent,
-        .overhead_ms = overhead_ms,
-        .overhead_ns_per_event = overhead_ns_per_event,
-        .memory_bytes_per_event = bytes_per_event,
-        .calculation_time_ms = calc_time,
-        .peak_calc_memory_mb = peak_calc_memory,
-        .total_events = g_config.total_events,
-        .thread_count = g_config.thread_count,
-        .timestamp = get_timestamp(),
-        .platform = get_platform()
-    };
+    BaselineData current_data;
+    current_data.accuracy_error_percent = accuracy_error_percent;
+    current_data.accuracy_error_ms_per_event = accuracy_error_ms_per_event;
+    current_data.overhead_percent = overhead_percent;
+    current_data.overhead_ms = overhead_ms;
+    current_data.overhead_ns_per_event = overhead_ns_per_event;
+    current_data.memory_bytes_per_event = bytes_per_event;
+    current_data.calculation_time_ms = calc_time;
+    current_data.peak_calc_memory_mb = peak_calc_memory;
+    current_data.total_events = g_config.total_events;
+    current_data.thread_count = g_config.thread_count;
+    current_data.timestamp = get_timestamp();
+    current_data.platform = get_platform();
     
     // Print summary
     std::cout << "\n=== Benchmark Results ===" << std::endl;
