@@ -304,6 +304,18 @@ While there are several excellent benchmarking and profiling tools available, CT
 CTRACK combines the ease of use of manual timing with the robustness of professional benchmarking tools, all in a package that's production-ready and highly adaptable. Its ability to quickly identify performance issues in multithreaded scenarios makes useful tool for modern C++ development.
 
 
+## Inspired By
+
+CTRACK stands on the shoulders of giants in the C++ performance analysis ecosystem. We're grateful to the following projects and their maintainers for pioneering innovative approaches to performance measurement, particularly the timing-by-lifetime concepts that became foundational to CTRACK's design:
+
+- [Darknet](https://github.com/hank-ai/darknet) 
+- [dlib](https://dlib.net/dlib/timing.h.html) 
+- [Tracy Profiler](https://github.com/wolfpld/tracy)
+- [Google Benchmark](https://github.com/google/benchmark)
+- [CppBenchmark](https://github.com/chronoxor/CppBenchmark)
+- [nanobench](https://github.com/martinus/nanobench)
+
+
 ## Contributing
 
 We welcome and encourage contributions from the community! Your input helps make CTRACK better for everyone. Here's how you can contribute:
@@ -328,6 +340,7 @@ Found a bug? We want to hear about it! Please open an issue on our GitHub reposi
 
 ### Feature Requests
 Have an idea for a new feature? Feel free to open an issue to discuss it. We're always looking for ways to make CTRACK more useful.
+
 
 ## License
 
