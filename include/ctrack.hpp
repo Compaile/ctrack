@@ -17,6 +17,7 @@
 #include <map>
 #include <algorithm>
 #include <set>
+#include <unordered_set>
 #include <numeric>
 #ifndef CTRACK_DISABLE_EXECUTION_POLICY
 #include <execution>
@@ -142,7 +143,13 @@ namespace ctrack
 		template <typename T, typename Field>
 		size_t count_distinct_field_values(const std::vector<T> &vec, Field T::*field)
 		{
-			return get_distinct_field_values(vec, field).size();
+			std::unordered_set<std::remove_reference_t<decltype(std::declval<T>().*field)>> distinct_values;
+			distinct_values.reserve(vec.size() / 10); // Heuristic pre-allocation
+			for (const auto *item : vec)
+			{
+				distinct_values.insert(item->*field);
+			}
+			return distinct_values.size();
 		}
 
 		template <typename StructType, typename MemberType>
@@ -983,7 +990,7 @@ namespace ctrack
 				}
 
 				if (event_ptr->capacity() == event_ptr->size())
-					event_ptr->reserve(event_ptr->capacity() * 2);
+					event_ptr->reserve(event_ptr->capacity() * 1.8);
 
 				event_ptr->emplace_back(Event{start_time, end_time, filename, line, function, t_id, event_id});
 
