@@ -637,20 +637,18 @@ void compare_with_baseline(const BaselineData &current)
     }
 
     std::cout << "\n=== Baseline Comparison ===" << std::endl;
-    std::cout << std::fixed << std::setprecision(2);
-
-    auto print_comparison = [](const std::string &metric, double baseline_val, double current_val, bool lower_is_better = true)
+    std::cout << std::fixed << std::setprecision(2);    auto print_comparison = [](const std::string &metric, double baseline_val, double current_val, bool lower_is_better = true)
     {
         double diff = current_val - baseline_val;
         double percent_change = (diff / baseline_val) * 100.0;
 
-        std::string arrow = (diff > 0) ? "↑" : "↓";
-        std::string color = (lower_is_better ? (diff > 0 ? "🔴" : "🟢") : (diff > 0 ? "🟢" : "🔴"));
+        std::string direction = (diff > 0) ? "increased" : "decreased";
+        std::string indicator = (lower_is_better ? (diff > 0 ? "worse" : "better") : (diff > 0 ? "better" : "worse"));
 
         std::cout << metric << ":\n";
         std::cout << "  Baseline: " << baseline_val << "\n";
         std::cout << "  Current:  " << current_val << "\n";
-        std::cout << "  Change:   " << color << " " << std::abs(percent_change) << "% " << arrow << "\n\n";
+        std::cout << "  Change:   " << indicator << " - " << std::abs(percent_change) << "% " << direction << "\n\n";
     };
 
     print_comparison("Accuracy Error %", baseline.accuracy_error_percent, current.accuracy_error_percent);
