@@ -459,15 +459,19 @@ namespace ctrack {
 		inline std::vector<Simple_Event> load_child_events_simple(const std::vector<Simple_Event>& parent_events_simple,
 			const std::unordered_map < int_fast64_t, Event>& events_map, const  std::unordered_map< int_fast64_t, std::vector< int_fast64_t>>& child_graph) {
 			std::vector<const Event*> child_events{};
+			// Reserve approximate capacity to reduce reallocations
+			child_events.reserve(parent_events_simple.size() * 2);
 
 			//std::set< int_fast64_t> parent_ids = get_distinct_field_values(parent_events_simple, &Simple_Event::unique_id);
 			for (const auto& simple_parent_event : parent_events_simple)
 			{
 				auto it = child_graph.find(simple_parent_event.unique_id);
 				if (it != child_graph.end()) {
+					const auto& parent_event = events_map.at(simple_parent_event.unique_id);
+					
 					for (auto& child_id : it->second) {
-						auto& child_event = events_map.at(child_id);
-						auto& parent_event = events_map.at(simple_parent_event.unique_id);
+						const auto& child_event = events_map.at(child_id);
+						
 						if (child_event.filename == parent_event.filename &&
 							child_event.function == parent_event.function &&
 							child_event.line == parent_event.line)
