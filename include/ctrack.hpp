@@ -104,6 +104,18 @@ namespace ctrack
 		}
 
 		template <typename T, typename Field>
+		auto get_distinct_field_values(const std::vector<const T*> &vec, Field T::*field)
+		{
+			std::set<std::remove_reference_t<decltype(std::declval<T>().*field)>> distinct_values;
+
+			std::transform(vec.begin(), vec.end(),
+						   std::inserter(distinct_values, distinct_values.end()),
+						   [field](const T *item)
+						   { return item->*field; });
+			return distinct_values;
+		}
+
+		template <typename T, typename Field>
 		auto get_distinct_field_values(const std::vector<T> &vec, Field T::*field)
 		{
 			std::set<std::remove_reference_t<decltype(std::declval<T>().*field)>> distinct_values;
@@ -522,7 +534,7 @@ namespace ctrack
 		}
 
 		inline std::vector<Simple_Event> load_child_events_simple(const std::vector<Simple_Event> &parent_events_simple,
-																  const std::unordered_map<int_fast64_t, Event> &events_map, const std::unordered_map<int_fast64_t, std::vector<int_fast64_t>> &child_graph)
+																  const std::unordered_map<int_fast64_t, const Event*> &events_map, const std::unordered_map<int_fast64_t, std::vector<int_fast64_t>> &child_graph)
 		{
 			std::vector<const Event *> child_events{};
 
@@ -536,12 +548,12 @@ namespace ctrack
 					{
 						auto &child_event = events_map.at(child_id);
 						auto &parent_event = events_map.at(simple_parent_event.unique_id);
-						if (child_event.filename == parent_event.filename &&
-							child_event.function == parent_event.function &&
-							child_event.line == parent_event.line)
+						if (child_event->filename == parent_event->filename &&
+							child_event->function == parent_event->function &&
+							child_event->line == parent_event->line)
 							continue;
 
-						child_events.push_back(&child_event);
+						child_events.push_back(child_event);
 					}
 				}
 			}
@@ -552,7 +564,7 @@ namespace ctrack
 		class EventGroup
 		{
 		public:
-			void calculateStats(unsigned int non_center_percent, const std::unordered_map<int_fast64_t, Event> &events_map, const std::unordered_map<int_fast64_t, std::vector<int_fast64_t>> &child_graph)
+			void calculateStats(unsigned int non_center_percent, const std::unordered_map<int_fast64_t, const Event*> &events_map, const std::unordered_map<int_fast64_t, std::vector<int_fast64_t>> &child_graph)
 			{
 				if (all_events.size() == 0)
 					return;
@@ -573,7 +585,7 @@ namespace ctrack
 				all_st = calculate_std_dev_field(all_events_simple, &Simple_Event::duration, all_mean); // std::sqrt(all_variance);
 				all_cv = all_st / all_mean;
 
-				all_thread_cnt = static_cast<unsigned int>(count_distinct_field_values(all_events, &Event::thread_id));
+				all_thread_cnt = static_cast<unsigned int>(get_distinct_field_values(all_events, &Event::thread_id).size());
 				unsigned int amount_non_center = all_cnt * non_center_percent / 100;
 
 				fastest_range = non_center_percent;
@@ -650,7 +662,7 @@ namespace ctrack
 			uint_fast64_t all_time_active_exclusive = 0;
 			unsigned int all_thread_cnt = 0;
 			std::vector<Simple_Event> all_grouped = {};
-			std::vector<Event> all_events = {};
+			std::vector<const Event*> all_events = {};
 
 			// fastest_group
 			unsigned int fastest_range = 0;
@@ -836,15 +848,23 @@ namespace ctrack
 										sorted_events.end());
 			}
 
-			void reserve_a_events(size_t size)
-			{
-				a_events.reserve(size);
+			void move_events_from_store(std::deque<t_events>& events) {
+				m_events_storage = std::move(events);
 			}
 
-			inline void add_event(const std::string_view &filename, const std::string_view function, const int line, const Event &e)
-			{
-				f_res[filename][function][line].all_events.push_back(e);
-				a_events.insert({get_unique_event_id(e.thread_id, e.event_id), e});
+			void populate_maps() {
+				size_t total_events = 0;
+                for(const auto& event_vec : m_events_storage) {
+                    total_events += event_vec.size();
+                }
+                a_events.reserve(total_events);
+
+                for(const auto& event_vec : m_events_storage) {
+                    for(const auto& event : event_vec) {
+                        f_res[event.filename][event.function][event.line].all_events.push_back(&event);
+                        a_events.insert({get_unique_event_id(event.thread_id, event.event_id), &event});
+                    }
+                }
 			}
 
 			void add_sub_events(const sub_events &s_events, const unsigned int thread_id_)
@@ -860,7 +880,7 @@ namespace ctrack
 				}
 			}
 
-			std::unordered_map<int_fast64_t, Event> a_events{};
+			std::unordered_map<int_fast64_t, const Event*> a_events{};
 			filename_result f_res{};
 
 			std::unordered_map<int_fast64_t, std::vector<int_fast64_t>> child_graph{};
@@ -875,6 +895,8 @@ namespace ctrack
 
 			std::vector<EventGroup *> sorted_events{};
 			std::string center_intervall_str;
+		private:
+			std::deque<t_events> m_events_storage;
 		};
 
 		inline int fetch_event_t_id()
@@ -1010,21 +1032,13 @@ namespace ctrack
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				std::scoped_lock lock(store::event_mutex);
 
-				auto all_events_cnt = countAllEvents(store::a_events);
-				res.reserve_a_events(all_events_cnt);
+				res.move_events_from_store(store::a_events);
+				res.populate_maps();
 
 				for (int thread_id_ = 0; thread_id_ <= store::thread_cnt; thread_id_++)
 				{
-					auto &t_events_entry = store::a_events[thread_id_];
 					auto &t_sub_events = store::a_sub_events[thread_id_];
 					res.add_sub_events(t_sub_events, thread_id_);
-
-					for (const auto &c_event : t_events_entry)
-					{
-						res.add_event(c_event.filename, c_event.function, c_event.line, c_event);
-					}
-					t_events_entry.clear();
-					t_events_entry.shrink_to_fit();
 				}
 				clear_a_store();
 				store::write_events_locked = false;
