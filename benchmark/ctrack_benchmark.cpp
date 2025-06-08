@@ -348,22 +348,28 @@ bool load_baseline(BaselineData& data) {
     if (!file) {
         return false;
     }
-    
+
     // Simple JSON parsing (production code would use a proper JSON library)
     std::string line;
     while (std::getline(file, line)) {
-        if (line.find("\"accuracy_error_percent\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"accuracy_error_percent\": %lf,", &data.accuracy_error_percent);
-        } else if (line.find("\"overhead_percent\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"overhead_percent\": %lf,", &data.overhead_percent);
-        } else if (line.find("\"memory_bytes_per_event\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"memory_bytes_per_event\": %lf,", &data.memory_bytes_per_event);
-        } else if (line.find("\"calculation_time_ms\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"calculation_time_ms\": %lf,", &data.calculation_time_ms);
-        } else if (line.find("\"total_events\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"total_events\": %zu,", &data.total_events);
-        } else if (line.find("\"thread_count\":") != std::string::npos) {
-            sscanf(line.c_str(), "  \"thread_count\": %zu,", &data.thread_count);
+        size_t colon_pos = line.find(':');
+        if (colon_pos == std::string::npos) continue;
+
+        std::string value_part = line.substr(colon_pos + 1);
+        std::stringstream ss(value_part);
+
+        if (line.find("\"accuracy_error_percent\"") != std::string::npos) {
+            ss >> data.accuracy_error_percent;
+        } else if (line.find("\"overhead_percent\"") != std::string::npos) {
+            ss >> data.overhead_percent;
+        } else if (line.find("\"memory_bytes_per_event\"") != std::string::npos) {
+            ss >> data.memory_bytes_per_event;
+        } else if (line.find("\"calculation_time_ms\"") != std::string::npos) {
+            ss >> data.calculation_time_ms;
+        } else if (line.find("\"total_events\"") != std::string::npos) {
+            ss >> data.total_events;
+        } else if (line.find("\"thread_count\"") != std::string::npos) {
+            ss >> data.thread_count;
         }
     }
     
@@ -416,9 +422,17 @@ std::string get_platform() {
 // Get current timestamp
 std::string get_timestamp() {
     auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_buf;
+
+#ifdef _WIN32
+    localtime_s(&tm_buf, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_buf);
+#endif
+
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+    ss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S");
     return ss.str();
 }
 
@@ -483,14 +497,14 @@ int main(int argc, char* argv[]) {
     
     // Prepare results
     BaselineData current_data = {
-        .accuracy_error_percent = accuracy_error,
-        .overhead_percent = overhead_percent,
-        .memory_bytes_per_event = bytes_per_event,
-        .calculation_time_ms = calc_time,
-        .total_events = g_config.total_events,
-        .thread_count = g_config.thread_count,
-        .timestamp = get_timestamp(),
-        .platform = get_platform()
+        accuracy_error,
+        overhead_percent,
+        bytes_per_event,
+        calc_time,
+        g_config.total_events,
+        g_config.thread_count,
+        get_timestamp(),
+        get_platform()
     };
     
     // Print summary
