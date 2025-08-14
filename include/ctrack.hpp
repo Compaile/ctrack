@@ -991,7 +991,7 @@ namespace ctrack
 				}
 
 				if (event_ptr->capacity() == event_ptr->size())
-					event_ptr->reserve(event_ptr->capacity() * 1.8);
+					event_ptr->reserve(event_ptr->capacity() * 2);
 
 				event_ptr->emplace_back(Event{start_time, end_time, filename, line, function, t_id, event_id});
 

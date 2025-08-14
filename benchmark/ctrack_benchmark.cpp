@@ -654,8 +654,8 @@ void compare_with_baseline(const BaselineData &current)
 
     print_comparison("Accuracy Error %", baseline.accuracy_error_percent, current.accuracy_error_percent);
     print_comparison("Accuracy Error (ms/event)", baseline.accuracy_error_ms_per_event, current.accuracy_error_ms_per_event);
-    print_comparison("Overhead %", baseline.overhead_percent, current.overhead_percent);
-    print_comparison("Overhead Time (ms)", baseline.overhead_ms, current.overhead_ms);
+    print_comparison("Overhead %", std::abs(baseline.overhead_percent), std::abs(current.overhead_percent));
+    print_comparison("Overhead Time (ms)", std::abs(baseline.overhead_ms), std::abs(current.overhead_ms));
     print_comparison("Overhead per Event (ns)", baseline.overhead_ns_per_event, current.overhead_ns_per_event);
     print_comparison("Memory/Event (bytes)", baseline.memory_bytes_per_event, current.memory_bytes_per_event);
     print_comparison("Calculation Time (ms)", baseline.calculation_time_ms, current.calculation_time_ms);
