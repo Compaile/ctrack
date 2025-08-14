@@ -637,7 +637,8 @@ void compare_with_baseline(const BaselineData &current)
     }
 
     std::cout << "\n=== Baseline Comparison ===" << std::endl;
-    std::cout << std::fixed << std::setprecision(2);    auto print_comparison = [](const std::string &metric, double baseline_val, double current_val, bool lower_is_better = true)
+    std::cout << std::fixed << std::setprecision(2);
+    auto print_comparison = [](const std::string &metric, double baseline_val, double current_val, bool lower_is_better = true)
     {
         double diff = current_val - baseline_val;
         double percent_change = (diff / baseline_val) * 100.0;
