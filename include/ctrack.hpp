@@ -753,11 +753,17 @@ namespace ctrack
 			std::string filename;
 			std::string function_name;
 			int line{};
-			std::chrono::nanoseconds time_acc{};
-			std::chrono::nanoseconds sd{};
-			double cv{};
-			int calls{};
-			int threads{};
+			std::chrono::nanoseconds time_acc{};     // Simple sum of all execution times (can exceed wall clock in MT)
+			std::chrono::nanoseconds sd{};           // Standard deviation
+			double cv{};                             // Coefficient of variation (sd/mean)
+			int calls{};                             // Total number of calls
+			int threads{};                           // Number of different threads that called this function
+			
+			// Summary-like fields (for unified access)
+			double percent_ae_bracket{};             // ae[center]% as percentage of total time
+			double percent_ae_all{};                 // ae[0-100]% as percentage of total time
+			std::chrono::nanoseconds time_ae_all{};  // Active exclusive time (wall clock minus child functions)
+			std::chrono::nanoseconds time_a_all{};   // Active time (actual wall clock time, handles MT overlap)
 			
 			// Fastest/Center/Slowest stats
 			std::chrono::nanoseconds fastest_min{};
@@ -765,8 +771,8 @@ namespace ctrack
 			std::chrono::nanoseconds center_min{};
 			std::chrono::nanoseconds center_mean{};
 			std::chrono::nanoseconds center_med{};
-			std::chrono::nanoseconds center_time_a{};
-			std::chrono::nanoseconds center_time_ae{};
+			std::chrono::nanoseconds center_time_a{};   // Active time for center range
+			std::chrono::nanoseconds center_time_ae{};  // Active exclusive time for center range
 			std::chrono::nanoseconds center_max{};
 			std::chrono::nanoseconds slowest_mean{};
 			std::chrono::nanoseconds slowest_max{};
@@ -1020,6 +1026,14 @@ namespace ctrack
 					detail_row.cv = entry->all_cv;
 					detail_row.calls = entry->all_cnt;
 					detail_row.threads = entry->all_thread_cnt;
+					
+					// Summary-like fields (same calculations as summary row)
+					detail_row.percent_ae_bracket = (time_total > 0) ? 
+						(static_cast<double>(entry->center_time_active_exclusive) / time_total * 100.0) : 0.0;
+					detail_row.percent_ae_all = (time_total > 0) ? 
+						(static_cast<double>(entry->all_time_active_exclusive) / time_total * 100.0) : 0.0;
+					detail_row.time_ae_all = std::chrono::nanoseconds(entry->all_time_active_exclusive);
+					detail_row.time_a_all = std::chrono::nanoseconds(entry->all_time_active);
 					
 					// Fastest/Center/Slowest stats
 					detail_row.fastest_min = std::chrono::nanoseconds(entry->fastest_min);
