@@ -28,6 +28,9 @@
 #include <sstream>
 #include <atomic>
 #include <cmath>
+#include <fstream>
+#include <cstring>
+#include <cerrno>
 
 #define CTRACK_VERSION_MAJOR 1
 #define CTRACK_VERSION_MINOR 1
@@ -146,9 +149,9 @@ namespace ctrack
 		{
 			std::unordered_set<std::remove_reference_t<decltype(std::declval<T>().*field)>> distinct_values;
 			distinct_values.reserve(vec.size() / 10); // Heuristic pre-allocation
-			for (const auto *item : vec)
+			for (const auto &item : vec)
 			{
-				distinct_values.insert(item->*field);
+				distinct_values.insert(item.*field);
 			}
 			return distinct_values.size();
 		}
@@ -663,7 +666,8 @@ namespace ctrack
 
 					std::sort(OPT_EXEC_POLICY center_child_events_simple.begin(), center_child_events_simple.end(), cmp_simple_event_by_start_time_asc);
 					auto center_child_events_grouped = sorted_create_grouped_simple_events(center_child_events_simple);
-					center_time_active_exclusive = center_time_active - sum_field(center_child_events_grouped, &Simple_Event::duration);
+					const uint_fast64_t center_child_time_active = sum_field(center_child_events_grouped, &Simple_Event::duration);
+					center_time_active_exclusive = center_time_active > center_child_time_active ? center_time_active - center_child_time_active : 0;
 				}
 
 				std::sort(OPT_EXEC_POLICY all_events_simple.begin(), all_events_simple.end(), cmp_simple_event_by_start_time_asc);
@@ -672,7 +676,8 @@ namespace ctrack
 
 				std::sort(OPT_EXEC_POLICY all_child_events_simple.begin(), all_child_events_simple.end(), cmp_simple_event_by_start_time_asc);
 				auto all_child_events_grouped = sorted_create_grouped_simple_events(all_child_events_simple);
-				all_time_active_exclusive = all_time_active - sum_field(all_child_events_grouped, &Simple_Event::duration);
+				const uint_fast64_t all_child_time_active = sum_field(all_child_events_grouped, &Simple_Event::duration);
+				all_time_active_exclusive = all_time_active > all_child_time_active ? all_time_active - all_child_time_active : 0;
 			}
 
 			// all_group
@@ -1098,6 +1103,342 @@ namespace ctrack
 			res.get_detail_table(ss, false, true);
 
 			return ss.str();
+		}
+
+		// Serialization/Deserialization functions for debugging ctrack performance
+		inline bool save_events_to_file(const std::string &filename)
+		{
+			std::ofstream file(filename, std::ios::binary);
+			if (!file.is_open())
+			{
+				// std::cerr << "Failed to open file for writing: " << filename << " - " << std::strerror(errno) << std::endl;
+				return false;
+			}
+
+			// Lock to ensure thread safety
+			store::write_events_locked = true;
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::scoped_lock lock(store::event_mutex);
+
+			try
+			{
+				// Write magic number
+				const char magic[4] = {'C', 'T', 'R', 'K'};
+				file.write(magic, 4);
+
+				// Write version
+				uint32_t version = (CTRACK_VERSION_MAJOR << 16) | (CTRACK_VERSION_MINOR << 8) | CTRACK_VERSION_PATCH;
+				file.write(reinterpret_cast<const char *>(&version), sizeof(version));
+
+				// Write thread count
+				int32_t thread_count = store::thread_cnt + 1; // thread_cnt is 0-based
+				file.write(reinterpret_cast<const char *>(&thread_count), sizeof(thread_count));
+
+				// Write track start time as nanoseconds since epoch
+				auto start_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+									store::track_start_time.time_since_epoch())
+									.count();
+				file.write(reinterpret_cast<const char *>(&start_ns), sizeof(start_ns));
+
+				// Build string table for filenames and functions
+				std::unordered_map<std::string, uint32_t> string_table;
+				std::vector<std::string> strings;
+
+				for (int t = 0; t <= store::thread_cnt; ++t)
+				{
+					if (t >= static_cast<int>(store::a_events.size()))
+						continue;
+					const auto &events = store::a_events[t];
+					for (const auto &event : events)
+					{
+						std::string filename_str(event.filename);
+						std::string function_str(event.function);
+
+						if (string_table.find(filename_str) == string_table.end())
+						{
+							string_table[filename_str] = static_cast<uint32_t>(strings.size());
+							strings.push_back(filename_str);
+						}
+						if (string_table.find(function_str) == string_table.end())
+						{
+							string_table[function_str] = static_cast<uint32_t>(strings.size());
+							strings.push_back(function_str);
+						}
+					}
+				}
+
+				// Write string table
+				uint32_t string_count = static_cast<uint32_t>(strings.size());
+				file.write(reinterpret_cast<const char *>(&string_count), sizeof(string_count));
+				for (const auto &str : strings)
+				{
+					uint32_t len = static_cast<uint32_t>(str.length());
+					file.write(reinterpret_cast<const char *>(&len), sizeof(len));
+					file.write(str.c_str(), len);
+				}
+
+				// Write events for each thread
+				for (int t = 0; t <= store::thread_cnt; ++t)
+				{
+					if (t >= static_cast<int>(store::a_events.size()))
+						continue;
+
+					const auto &events = store::a_events[t];
+					uint32_t event_count = static_cast<uint32_t>(events.size());
+					file.write(reinterpret_cast<const char *>(&event_count), sizeof(event_count));
+
+					for (const auto &event : events)
+					{
+						// Write event data
+						auto start_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+											event.start_time.time_since_epoch())
+											.count();
+						auto end_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+										  event.end_time.time_since_epoch())
+										  .count();
+
+						file.write(reinterpret_cast<const char *>(&start_ns), sizeof(start_ns));
+						file.write(reinterpret_cast<const char *>(&end_ns), sizeof(end_ns));
+						file.write(reinterpret_cast<const char *>(&event.line), sizeof(event.line));
+						file.write(reinterpret_cast<const char *>(&event.thread_id), sizeof(event.thread_id));
+
+						uint32_t filename_idx = string_table[std::string(event.filename)];
+						uint32_t function_idx = string_table[std::string(event.function)];
+						file.write(reinterpret_cast<const char *>(&filename_idx), sizeof(filename_idx));
+						file.write(reinterpret_cast<const char *>(&function_idx), sizeof(function_idx));
+						file.write(reinterpret_cast<const char *>(&event.event_id), sizeof(event.event_id));
+					}
+				}
+
+				// Write sub-events for each thread
+				for (int t = 0; t <= store::thread_cnt; ++t)
+				{
+					if (t >= static_cast<int>(store::a_sub_events.size()))
+						continue;
+
+					const auto &sub_events = store::a_sub_events[t];
+					uint32_t parent_count = static_cast<uint32_t>(sub_events.size());
+					file.write(reinterpret_cast<const char *>(&parent_count), sizeof(parent_count));
+
+					for (const auto &children : sub_events)
+					{
+						uint32_t child_count = static_cast<uint32_t>(children.size());
+						file.write(reinterpret_cast<const char *>(&child_count), sizeof(child_count));
+						for (unsigned int child_id : children)
+						{
+							file.write(reinterpret_cast<const char *>(&child_id), sizeof(child_id));
+						}
+					}
+				}
+
+				file.close();
+				store::write_events_locked = false;
+				return true;
+			}
+			catch (const std::exception &e)
+			{
+				std::cerr << "Error saving events to file: " << e.what() << std::endl;
+				store::write_events_locked = false;
+				return false;
+			}
+		}
+
+		inline bool load_events_from_file(const std::string &filename)
+		{
+			std::ifstream file(filename, std::ios::binary);
+			if (!file.is_open())
+			{
+				// std::cerr << "Failed to open file for reading: " << filename << " - " << std::strerror(errno) << std::endl;
+				return false;
+			}
+
+			// Lock to ensure thread safety
+			store::write_events_locked = true;
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			std::scoped_lock lock(store::event_mutex);
+
+			try
+			{
+				// Read and verify magic number
+				char magic[4];
+				file.read(magic, 4);
+				if (std::memcmp(magic, "CTRK", 4) != 0)
+				{
+					std::cerr << "Invalid file format - magic number mismatch" << std::endl;
+					store::write_events_locked = false;
+					return false;
+				}
+
+				// Read version
+				uint32_t version;
+				file.read(reinterpret_cast<char *>(&version), sizeof(version));
+				uint32_t expected_version = (CTRACK_VERSION_MAJOR << 16) | (CTRACK_VERSION_MINOR << 8) | CTRACK_VERSION_PATCH;
+				if (version != expected_version)
+				{
+					std::cerr << "Warning: Version mismatch. File version: " << version
+							  << ", Current version: " << expected_version << std::endl;
+				}
+
+				// Clear existing data
+				clear_a_store();
+
+				// Read thread count
+				int32_t thread_count;
+				file.read(reinterpret_cast<char *>(&thread_count), sizeof(thread_count));
+				store::thread_cnt = thread_count - 1; // Convert back to 0-based
+
+				// Read track start time
+				int64_t start_ns;
+				file.read(reinterpret_cast<char *>(&start_ns), sizeof(start_ns));
+				store::track_start_time = std::chrono::high_resolution_clock::time_point(
+					std::chrono::nanoseconds(start_ns));
+
+				// Read string table
+				uint32_t string_count;
+				file.read(reinterpret_cast<char *>(&string_count), sizeof(string_count));
+				std::vector<std::string> strings;
+				strings.reserve(string_count);
+
+				for (uint32_t i = 0; i < string_count; ++i)
+				{
+					uint32_t len;
+					file.read(reinterpret_cast<char *>(&len), sizeof(len));
+					std::string str(len, '\0');
+					file.read(&str[0], len);
+					strings.push_back(str);
+				}
+
+				// Prepare storage
+				store::a_events.resize(thread_count);
+				store::a_sub_events.resize(thread_count);
+				store::a_thread_ids.resize(thread_count);
+				store::a_current_event_id.resize(thread_count);
+				store::a_current_event_cnt.resize(thread_count);
+
+				// Store strings permanently to ensure string_views remain valid
+				static std::vector<std::string> permanent_strings = strings;
+
+				// Read events for each thread
+				for (int t = 0; t < thread_count; ++t)
+				{
+					store::a_thread_ids[t] = t;
+
+					uint32_t event_count;
+					file.read(reinterpret_cast<char *>(&event_count), sizeof(event_count));
+					store::a_events[t].reserve(event_count);
+					store::a_current_event_cnt[t] = event_count;
+
+					for (uint32_t e = 0; e < event_count; ++e)
+					{
+						int64_t start_ns, end_ns;
+						int line, thread_id;
+						uint32_t filename_idx, function_idx;
+						unsigned int event_id;
+
+						file.read(reinterpret_cast<char *>(&start_ns), sizeof(start_ns));
+						file.read(reinterpret_cast<char *>(&end_ns), sizeof(end_ns));
+						file.read(reinterpret_cast<char *>(&line), sizeof(line));
+						file.read(reinterpret_cast<char *>(&thread_id), sizeof(thread_id));
+						file.read(reinterpret_cast<char *>(&filename_idx), sizeof(filename_idx));
+						file.read(reinterpret_cast<char *>(&function_idx), sizeof(function_idx));
+						file.read(reinterpret_cast<char *>(&event_id), sizeof(event_id));
+
+						auto start_time = std::chrono::high_resolution_clock::time_point(
+							std::chrono::nanoseconds(start_ns));
+						auto end_time = std::chrono::high_resolution_clock::time_point(
+							std::chrono::nanoseconds(end_ns));
+
+						store::a_events[t].emplace_back(
+							start_time, end_time,
+							permanent_strings[filename_idx],
+							line,
+							permanent_strings[function_idx],
+							thread_id,
+							event_id);
+					}
+				}
+
+				// Read sub-events for each thread
+				for (int t = 0; t < thread_count; ++t)
+				{
+					uint32_t parent_count;
+					file.read(reinterpret_cast<char *>(&parent_count), sizeof(parent_count));
+					store::a_sub_events[t].resize(parent_count);
+
+					for (uint32_t p = 0; p < parent_count; ++p)
+					{
+						uint32_t child_count;
+						file.read(reinterpret_cast<char *>(&child_count), sizeof(child_count));
+						store::a_sub_events[t][p].reserve(child_count);
+
+						for (uint32_t c = 0; c < child_count; ++c)
+						{
+							unsigned int child_id;
+							file.read(reinterpret_cast<char *>(&child_id), sizeof(child_id));
+							store::a_sub_events[t][p].push_back(child_id);
+						}
+					}
+				}
+
+				file.close();
+				store::write_events_locked = false;
+				return true;
+			}
+			catch (const std::exception &e)
+			{
+				std::cerr << "Error loading events from file: " << e.what() << std::endl;
+				store::write_events_locked = false;
+				return false;
+			}
+		}
+
+		// Function to save current events to file instead of printing
+		inline bool result_save(const std::string &filename, ctrack_result_settings settings = {})
+		{
+			return save_events_to_file(filename);
+		}
+
+		// Function to load events from file and print results
+		inline void result_print_from_file(const std::string &filename, ctrack_result_settings settings = {})
+		{
+			if (!load_events_from_file(filename))
+			{
+				std::cerr << "Failed to load events from file: " << filename << std::endl;
+				return;
+			}
+
+			// Now calculate and print results using the loaded data
+			auto end = std::chrono::high_resolution_clock::now();
+
+			// Create a result object with the loaded data
+			ctrack_result res{settings, store::track_start_time, end};
+
+			// Move events from store to result
+			res.move_events_from_store(store::a_events);
+			res.populate_groups();
+
+			// Add sub-events
+			for (int thread_id_ = 0; thread_id_ <= store::thread_cnt; thread_id_++)
+			{
+				if (thread_id_ < static_cast<int>(store::a_sub_events.size()))
+				{
+					auto &t_sub_events = store::a_sub_events[thread_id_];
+					res.add_sub_events(t_sub_events, thread_id_);
+				}
+			}
+			std::cout << "loaded events from file." << std::endl;
+
+			// Calculate statistics
+			res.calculate_stats();
+
+			// Print results
+			std::cout << "Details" << std::endl;
+			res.get_detail_table(std::cout, true);
+			std::cout << "Summary" << std::endl;
+			res.get_summary_table(std::cout, true);
+
+			// Clear the store after printing
+			clear_a_store();
 		}
 	}
 }
