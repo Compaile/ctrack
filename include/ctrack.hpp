@@ -730,6 +730,73 @@ namespace ctrack
 			double percent_exclude_fastest_active_exclusive = 0.0; // between 0-100
 		};
 
+		struct summary_row
+		{
+			std::string filename;
+			std::string function_name;
+			int line{};
+			int calls{};
+			double percent_ae_bracket{};  // ae[center]% by configuration
+			double percent_ae_all{};       // ae[0-100]%
+			std::chrono::nanoseconds time_ae_all{};
+			std::chrono::nanoseconds time_a_all{};
+		};
+
+		struct summary_table
+		{
+			std::vector<summary_row> rows;
+		};
+
+		struct detail_stats
+		{
+			// Info fields
+			std::string filename;
+			std::string function_name;
+			int line{};
+			std::chrono::nanoseconds time_acc{};
+			std::chrono::nanoseconds sd{};
+			double cv{};
+			int calls{};
+			int threads{};
+			
+			// Fastest/Center/Slowest stats
+			std::chrono::nanoseconds fastest_min{};
+			std::chrono::nanoseconds fastest_mean{};
+			std::chrono::nanoseconds center_min{};
+			std::chrono::nanoseconds center_mean{};
+			std::chrono::nanoseconds center_med{};
+			std::chrono::nanoseconds center_time_a{};
+			std::chrono::nanoseconds center_time_ae{};
+			std::chrono::nanoseconds center_max{};
+			std::chrono::nanoseconds slowest_mean{};
+			std::chrono::nanoseconds slowest_max{};
+			
+			// Percentile ranges for reference
+			unsigned int fastest_range{};
+			unsigned int slowest_range{};
+		};
+
+		struct detail_table
+		{
+			std::vector<detail_stats> rows;
+		};
+
+		struct ctrack_result_tables
+		{
+			// Meta information
+			std::chrono::high_resolution_clock::time_point start_time;
+			std::chrono::high_resolution_clock::time_point end_time;
+			std::chrono::nanoseconds time_total{};
+			std::chrono::nanoseconds time_ctracked{};
+			
+			// Table data
+			summary_table summary;
+			detail_table details;
+			
+			// Settings used
+			ctrack_result_settings settings;
+		};
+
 		class ctrack_result
 		{
 		public:
@@ -752,22 +819,22 @@ namespace ctrack
 										"time ctracked %",
 									},
 									use_color, alternate_colors);
-				info.addRow({BeautifulTable::table_timepoint(track_start_time), BeautifulTable::table_timepoint(track_end_time),
-							 BeautifulTable::table_time(time_total), BeautifulTable::table_time(sum_time_active_exclusive),
-							 BeautifulTable::table_percentage(sum_time_active_exclusive, time_total)});
+				info.addRow({BeautifulTable::table_timepoint(tables.start_time), BeautifulTable::table_timepoint(tables.end_time),
+							 BeautifulTable::table_time(static_cast<uint_fast64_t>(tables.time_total.count())), BeautifulTable::table_time(static_cast<uint_fast64_t>(tables.time_ctracked.count())),
+							 BeautifulTable::table_percentage(static_cast<uint_fast64_t>(tables.time_ctracked.count()), static_cast<uint_fast64_t>(tables.time_total.count()))});
 
 				info.print(stream);
 				BeautifulTable table({"filename", "function", "line", "calls", "ae" + center_intervall_str + "%", "ae[0-100]%",
 									  "time ae[0-100]", "time a[0-100]"},
 									 use_color, alternate_colors);
-				for (auto &entry : sorted_events)
+				for (const auto &row : tables.summary.rows)
 				{
-					table.addRow({BeautifulTable::stable_shortenPath(entry->filename), entry->function_name, BeautifulTable::table_string(entry->line),
-								  BeautifulTable::table_string(entry->all_cnt),
-								  BeautifulTable::table_percentage(entry->center_time_active_exclusive, time_total),
-								  BeautifulTable::table_percentage(entry->all_time_active_exclusive, time_total),
-								  BeautifulTable::table_time(entry->all_time_active_exclusive),
-								  BeautifulTable::table_time(entry->all_time_active)});
+					table.addRow({BeautifulTable::stable_shortenPath(row.filename), row.function_name, BeautifulTable::table_string(row.line),
+								  BeautifulTable::table_string(row.calls),
+								  BeautifulTable::table_percentage(static_cast<uint_fast64_t>(row.percent_ae_bracket * tables.time_total.count() / 100.0), static_cast<uint_fast64_t>(tables.time_total.count())),
+								  BeautifulTable::table_percentage(static_cast<uint_fast64_t>(row.percent_ae_all * tables.time_total.count() / 100.0), static_cast<uint_fast64_t>(tables.time_total.count())),
+								  BeautifulTable::table_time(static_cast<uint_fast64_t>(row.time_ae_all.count())),
+								  BeautifulTable::table_time(static_cast<uint_fast64_t>(row.time_a_all.count()))});
 				}
 
 				table.print(stream);
@@ -776,29 +843,30 @@ namespace ctrack
 			template <typename StreamType>
 			void get_detail_table(StreamType &stream, bool use_color = false, bool reverse_vector = false)
 			{
+				auto details_copy = tables.details.rows;
 				if (reverse_vector)
 				{
-					std::reverse(sorted_events.begin(), sorted_events.end());
+					std::reverse(details_copy.begin(), details_copy.end());
 				}
-				for (int i = static_cast<int>(sorted_events.size()) - 1; i >= 0; i--)
+				for (int i = static_cast<int>(details_copy.size()) - 1; i >= 0; i--)
 				{
-					auto &entry = sorted_events[i];
+					const auto &detail = details_copy[i];
 
 					BeautifulTable info({"filename", "function", "line", "time acc", "sd", "cv", "calls", "threads"}, use_color, default_colors);
-					info.addRow({BeautifulTable::stable_shortenPath(entry->filename), entry->function_name, BeautifulTable::table_string(entry->line),
-								 BeautifulTable::table_time(entry->all_time_acc),
-								 BeautifulTable::table_time(sorted_events[i]->all_st), BeautifulTable::table_string(sorted_events[i]->all_cv),
-								 BeautifulTable::table_string(sorted_events[i]->all_cnt), BeautifulTable::table_string(sorted_events[i]->all_thread_cnt)});
+					info.addRow({BeautifulTable::stable_shortenPath(detail.filename), detail.function_name, BeautifulTable::table_string(detail.line),
+								 BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.time_acc.count())),
+								 BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.sd.count())), BeautifulTable::table_string(detail.cv),
+								 BeautifulTable::table_string(detail.calls), BeautifulTable::table_string(detail.threads)});
 
 					BeautifulTable table({"min", "mean", "min", "mean", "med", "time a", "time ae", "max", "mean", "max"}, use_color, default_colors,
-										 {{"fastest[0-" + std::to_string(settings.non_center_percent) + "]%", 2}, {"center" + center_intervall_str + "%", 6}, {"slowest[" + std::to_string(100 - settings.non_center_percent) + "-100]%", 2}});
+										 {{"fastest[0-" + std::to_string(detail.fastest_range) + "]%", 2}, {"center" + center_intervall_str + "%", 6}, {"slowest[" + std::to_string(detail.slowest_range) + "-100]%", 2}});
 
-					table.addRow({BeautifulTable::table_time(entry->fastest_min), BeautifulTable::table_time(entry->fastest_mean),
-								  BeautifulTable::table_time(entry->center_min), BeautifulTable::table_time(entry->center_mean),
-								  BeautifulTable::table_time(entry->center_med), BeautifulTable::table_time(entry->center_time_active),
-								  BeautifulTable::table_time(entry->center_time_active_exclusive),
-								  BeautifulTable::table_time(entry->center_max),
-								  BeautifulTable::table_time(entry->slowest_mean), BeautifulTable::table_time(entry->slowest_max)});
+					table.addRow({BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.fastest_min.count())), BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.fastest_mean.count())),
+								  BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.center_min.count())), BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.center_mean.count())),
+								  BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.center_med.count())), BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.center_time_a.count())),
+								  BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.center_time_ae.count())),
+								  BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.center_max.count())),
+								  BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.slowest_mean.count())), BeautifulTable::table_time(static_cast<uint_fast64_t>(detail.slowest_max.count()))});
 
 					info.print(stream);
 					table.print(stream);
@@ -846,6 +914,9 @@ namespace ctrack
 					sorted_events.erase(std::remove_if(sorted_events.begin(), sorted_events.end(), [min_time_active_exclusive](EventGroup *e)
 													   { return e->all_time_active_exclusive < min_time_active_exclusive; }),
 										sorted_events.end());
+				
+				// Build the structured result tables
+				build_result_tables();
 			}
 
 			void move_events_from_store(std::deque<t_events> &events)
@@ -900,9 +971,77 @@ namespace ctrack
 
 			std::vector<EventGroup *> sorted_events{};
 			std::string center_intervall_str;
+			ctrack_result_tables tables{};
 
 		private:
 			std::deque<t_events> m_events_storage;
+			
+			void build_result_tables()
+			{
+				// Populate meta information
+				tables.start_time = track_start_time;
+				tables.end_time = track_end_time;
+				tables.time_total = std::chrono::nanoseconds(time_total);
+				tables.time_ctracked = std::chrono::nanoseconds(sum_time_active_exclusive);
+				tables.settings = settings;
+				
+				// Clear existing data
+				tables.summary.rows.clear();
+				tables.details.rows.clear();
+				
+				// Reserve space for efficiency
+				tables.summary.rows.reserve(sorted_events.size());
+				tables.details.rows.reserve(sorted_events.size());
+				
+				// Build summary and detail rows from sorted_events
+				for (const auto& entry : sorted_events)
+				{
+					// Build summary row
+					summary_row sum_row;
+					sum_row.filename = std::string(entry->filename);
+					sum_row.function_name = std::string(entry->function_name);
+					sum_row.line = entry->line;
+					sum_row.calls = entry->all_cnt;
+					sum_row.percent_ae_bracket = (time_total > 0) ? 
+						(static_cast<double>(entry->center_time_active_exclusive) / time_total * 100.0) : 0.0;
+					sum_row.percent_ae_all = (time_total > 0) ? 
+						(static_cast<double>(entry->all_time_active_exclusive) / time_total * 100.0) : 0.0;
+					sum_row.time_ae_all = std::chrono::nanoseconds(entry->all_time_active_exclusive);
+					sum_row.time_a_all = std::chrono::nanoseconds(entry->all_time_active);
+					tables.summary.rows.push_back(sum_row);
+					
+					// Build detail row
+					detail_stats detail_row;
+					detail_row.filename = std::string(entry->filename);
+					detail_row.function_name = std::string(entry->function_name);
+					detail_row.line = entry->line;
+					detail_row.time_acc = std::chrono::nanoseconds(entry->all_time_acc);
+					detail_row.sd = std::chrono::nanoseconds(static_cast<uint_fast64_t>(entry->all_st));
+					detail_row.cv = entry->all_cv;
+					detail_row.calls = entry->all_cnt;
+					detail_row.threads = entry->all_thread_cnt;
+					
+					// Fastest/Center/Slowest stats
+					detail_row.fastest_min = std::chrono::nanoseconds(entry->fastest_min);
+					detail_row.fastest_mean = std::chrono::nanoseconds(static_cast<uint_fast64_t>(entry->fastest_mean));
+					detail_row.center_min = std::chrono::nanoseconds(entry->center_min);
+					detail_row.center_mean = std::chrono::nanoseconds(static_cast<uint_fast64_t>(entry->center_mean));
+					detail_row.center_med = std::chrono::nanoseconds(entry->center_med);
+					detail_row.center_time_a = std::chrono::nanoseconds(entry->center_time_active);
+					detail_row.center_time_ae = std::chrono::nanoseconds(entry->center_time_active_exclusive);
+					detail_row.center_max = std::chrono::nanoseconds(entry->center_max);
+					detail_row.slowest_mean = std::chrono::nanoseconds(static_cast<uint_fast64_t>(entry->slowest_mean));
+					detail_row.slowest_max = std::chrono::nanoseconds(entry->slowest_max);
+					
+					detail_row.fastest_range = entry->fastest_range;
+					detail_row.slowest_range = entry->slowest_range;
+					
+					tables.details.rows.push_back(detail_row);
+				}
+			}
+			
+		public:
+			const ctrack_result_tables& get_tables() const { return tables; }
 		};
 
 		inline int fetch_event_t_id()
@@ -1075,6 +1214,24 @@ namespace ctrack
 			res.get_detail_table(ss, false, true);
 
 			return ss.str();
+		}
+		
+		inline ctrack_result_tables result_get_tables(ctrack_result_settings settings = {})
+		{
+			auto res = calc_stats_and_clear(settings);
+			return res.get_tables();
+		}
+		
+		inline summary_table result_get_summary_table(ctrack_result_settings settings = {})
+		{
+			auto res = calc_stats_and_clear(settings);
+			return res.get_tables().summary;
+		}
+		
+		inline detail_table result_get_detail_table(ctrack_result_settings settings = {})
+		{
+			auto res = calc_stats_and_clear(settings);
+			return res.get_tables().details;
 		}
 	}
 }
