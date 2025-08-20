@@ -332,8 +332,8 @@ TEST_CASE("Mixed function calls across threads") {
 TEST_CASE("Nested function calls in multithreaded environment") {
     clear_ctrack();
     const int num_threads = 3;
-    const int parent_sleep_ms = 5;
-    const int child_sleep_ms = 5;
+    const int parent_sleep_ms = 50;
+    const int child_sleep_ms = 50;
     
     ThreadBarrier barrier(num_threads);
     std::vector<std::thread> threads;
@@ -362,6 +362,7 @@ TEST_CASE("Nested function calls in multithreaded environment") {
         } else if (stats.function_name == "nested_child") {
             child_stats = &stats;
         }
+        
     }
     
     REQUIRE(parent_stats != nullptr);

@@ -147,7 +147,7 @@ TEST_CASE("Percentile calculations with different settings") {
  
     
     // Use a wide range of sleep times for percentile testing
-    std::vector<int> sleep_times = {5, 7, 10, 12, 15, 20, 25, 30, 45, 60};
+    std::vector<int> sleep_times = {50, 70, 100, 120, 150, 200, 250, 300, 450, 600};
 
     
     // Test with default settings (5% exclusion on each end)
@@ -164,8 +164,8 @@ TEST_CASE("Percentile calculations with different settings") {
         const auto& stats = tables.details.rows[0];
         
         // With 5% on each side center is still all events
-        CHECK(stats.center_min < std::chrono::nanoseconds(7 * 1000000)); 
-        CHECK(stats.center_max > std::chrono::nanoseconds(60 * 1000000)); 
+        CHECK(stats.center_min < std::chrono::nanoseconds(70 * 1000000)); 
+        CHECK(stats.center_max > std::chrono::nanoseconds(600* 1000000)); 
         
         // Percentile ranges should reflect the settings
         CHECK(stats.fastest_range == 5);
@@ -190,8 +190,8 @@ TEST_CASE("Percentile calculations with different settings") {
         CHECK(stats.slowest_range == 90);
         
         // Center range should be even more constrained
-        CHECK(stats.center_min >= std::chrono::nanoseconds(6 * 1000000)); // Should exclude 5ms
-        CHECK(stats.center_max <= std::chrono::nanoseconds(60 * 1000000)); // Should exclude 60ms
+        CHECK(stats.center_min >= std::chrono::nanoseconds(60 * 1000000)); // Should exclude 5ms
+        CHECK(stats.center_max <= std::chrono::nanoseconds(600 * 1000000)); // Should exclude 60ms
     }
     
     // Test with 1% exclusion (minimal outlier removal)
@@ -211,8 +211,8 @@ TEST_CASE("Percentile calculations with different settings") {
         CHECK(stats.slowest_range == 99);
         
         // With 1% exclusion, center should be very close to full range
-        CHECK(test_helpers::within_tolerance(stats.center_min, std::chrono::nanoseconds(5 * 1000000), 30.0));
-        CHECK(test_helpers::within_tolerance(stats.center_max, std::chrono::nanoseconds(60 * 1000000), 30.0));
+        CHECK(test_helpers::within_tolerance(stats.center_min, std::chrono::nanoseconds(50 * 1000000), 30.0));
+        CHECK(test_helpers::within_tolerance(stats.center_max, std::chrono::nanoseconds(600 * 1000000), 30.0));
     }
 }
 
