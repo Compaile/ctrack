@@ -736,8 +736,8 @@ namespace ctrack
 			std::string function_name;
 			int line{};
 			int calls{};
-			double percent_ae_bracket{};  // ae[center]% by configuration
-			double percent_ae_all{};       // ae[0-100]%
+			double percent_ae_bracket{}; // ae[center]% by configuration
+			double percent_ae_all{};	 // ae[0-100]%
 			std::chrono::nanoseconds time_ae_all{};
 			std::chrono::nanoseconds time_a_all{};
 		};
@@ -753,30 +753,30 @@ namespace ctrack
 			std::string filename;
 			std::string function_name;
 			int line{};
-			std::chrono::nanoseconds time_acc{};     // Simple sum of all execution times (can exceed wall clock in MT)
-			std::chrono::nanoseconds sd{};           // Standard deviation
-			double cv{};                             // Coefficient of variation (sd/mean)
-			int calls{};                             // Total number of calls
-			int threads{};                           // Number of different threads that called this function
-			
+			std::chrono::nanoseconds time_acc{}; // Simple sum of all execution times (can exceed wall clock in MT)
+			std::chrono::nanoseconds sd{};		 // Standard deviation
+			double cv{};						 // Coefficient of variation (sd/mean)
+			int calls{};						 // Total number of calls
+			int threads{};						 // Number of different threads that called this function
+
 			// Summary-like fields (for unified access)
-			double percent_ae_bracket{};             // ae[center]% as percentage of total time
-			double percent_ae_all{};                 // ae[0-100]% as percentage of total time
-			std::chrono::nanoseconds time_ae_all{};  // Active exclusive time (wall clock minus child functions)
-			std::chrono::nanoseconds time_a_all{};   // Active time (actual wall clock time, handles MT overlap)
-			
+			double percent_ae_bracket{};			// ae[center]% as percentage of total time
+			double percent_ae_all{};				// ae[0-100]% as percentage of total time
+			std::chrono::nanoseconds time_ae_all{}; // Active exclusive time (wall clock minus child functions)
+			std::chrono::nanoseconds time_a_all{};	// Active time (actual wall clock time, handles MT overlap)
+
 			// Fastest/Center/Slowest stats
 			std::chrono::nanoseconds fastest_min{};
 			std::chrono::nanoseconds fastest_mean{};
 			std::chrono::nanoseconds center_min{};
 			std::chrono::nanoseconds center_mean{};
 			std::chrono::nanoseconds center_med{};
-			std::chrono::nanoseconds center_time_a{};   // Active time for center range
-			std::chrono::nanoseconds center_time_ae{};  // Active exclusive time for center range
+			std::chrono::nanoseconds center_time_a{};  // Active time for center range
+			std::chrono::nanoseconds center_time_ae{}; // Active exclusive time for center range
 			std::chrono::nanoseconds center_max{};
 			std::chrono::nanoseconds slowest_mean{};
 			std::chrono::nanoseconds slowest_max{};
-			
+
 			// Percentile ranges for reference
 			unsigned int fastest_range{};
 			unsigned int slowest_range{};
@@ -794,11 +794,11 @@ namespace ctrack
 			std::chrono::high_resolution_clock::time_point end_time;
 			std::chrono::nanoseconds time_total{};
 			std::chrono::nanoseconds time_ctracked{};
-			
+
 			// Table data
 			summary_table summary;
 			detail_table details;
-			
+
 			// Settings used
 			ctrack_result_settings settings;
 		};
@@ -920,7 +920,7 @@ namespace ctrack
 					sorted_events.erase(std::remove_if(sorted_events.begin(), sorted_events.end(), [min_time_active_exclusive](EventGroup *e)
 													   { return e->all_time_active_exclusive < min_time_active_exclusive; }),
 										sorted_events.end());
-				
+
 				// Build the structured result tables
 				build_result_tables();
 			}
@@ -981,7 +981,7 @@ namespace ctrack
 
 		private:
 			std::deque<t_events> m_events_storage;
-			
+
 			void build_result_tables()
 			{
 				// Populate meta information
@@ -990,17 +990,17 @@ namespace ctrack
 				tables.time_total = std::chrono::nanoseconds(time_total);
 				tables.time_ctracked = std::chrono::nanoseconds(sum_time_active_exclusive);
 				tables.settings = settings;
-				
+
 				// Clear existing data
 				tables.summary.rows.clear();
 				tables.details.rows.clear();
-				
+
 				// Reserve space for efficiency
 				tables.summary.rows.reserve(sorted_events.size());
 				tables.details.rows.reserve(sorted_events.size());
-				
+
 				// Build summary and detail rows from sorted_events
-				for (const auto& entry : sorted_events)
+				for (const auto &entry : sorted_events)
 				{
 					// Build summary row
 					summary_row sum_row;
@@ -1008,14 +1008,12 @@ namespace ctrack
 					sum_row.function_name = std::string(entry->function_name);
 					sum_row.line = entry->line;
 					sum_row.calls = entry->all_cnt;
-					sum_row.percent_ae_bracket = (time_total > 0) ? 
-						(static_cast<double>(entry->center_time_active_exclusive) / time_total * 100.0) : 0.0;
-					sum_row.percent_ae_all = (time_total > 0) ? 
-						(static_cast<double>(entry->all_time_active_exclusive) / time_total * 100.0) : 0.0;
+					sum_row.percent_ae_bracket = (time_total > 0) ? (static_cast<double>(entry->center_time_active_exclusive) / time_total * 100.0) : 0.0;
+					sum_row.percent_ae_all = (time_total > 0) ? (static_cast<double>(entry->all_time_active_exclusive) / time_total * 100.0) : 0.0;
 					sum_row.time_ae_all = std::chrono::nanoseconds(entry->all_time_active_exclusive);
 					sum_row.time_a_all = std::chrono::nanoseconds(entry->all_time_active);
 					tables.summary.rows.push_back(sum_row);
-					
+
 					// Build detail row
 					detail_stats detail_row;
 					detail_row.filename = std::string(entry->filename);
@@ -1026,15 +1024,13 @@ namespace ctrack
 					detail_row.cv = entry->all_cv;
 					detail_row.calls = entry->all_cnt;
 					detail_row.threads = entry->all_thread_cnt;
-					
+
 					// Summary-like fields (same calculations as summary row)
-					detail_row.percent_ae_bracket = (time_total > 0) ? 
-						(static_cast<double>(entry->center_time_active_exclusive) / time_total * 100.0) : 0.0;
-					detail_row.percent_ae_all = (time_total > 0) ? 
-						(static_cast<double>(entry->all_time_active_exclusive) / time_total * 100.0) : 0.0;
+					detail_row.percent_ae_bracket = (time_total > 0) ? (static_cast<double>(entry->center_time_active_exclusive) / time_total * 100.0) : 0.0;
+					detail_row.percent_ae_all = (time_total > 0) ? (static_cast<double>(entry->all_time_active_exclusive) / time_total * 100.0) : 0.0;
 					detail_row.time_ae_all = std::chrono::nanoseconds(entry->all_time_active_exclusive);
 					detail_row.time_a_all = std::chrono::nanoseconds(entry->all_time_active);
-					
+
 					// Fastest/Center/Slowest stats
 					detail_row.fastest_min = std::chrono::nanoseconds(entry->fastest_min);
 					detail_row.fastest_mean = std::chrono::nanoseconds(static_cast<uint_fast64_t>(entry->fastest_mean));
@@ -1046,16 +1042,16 @@ namespace ctrack
 					detail_row.center_max = std::chrono::nanoseconds(entry->center_max);
 					detail_row.slowest_mean = std::chrono::nanoseconds(static_cast<uint_fast64_t>(entry->slowest_mean));
 					detail_row.slowest_max = std::chrono::nanoseconds(entry->slowest_max);
-					
+
 					detail_row.fastest_range = entry->fastest_range;
 					detail_row.slowest_range = entry->slowest_range;
-					
+
 					tables.details.rows.push_back(detail_row);
 				}
 			}
-			
+
 		public:
-			const ctrack_result_tables& get_tables() const { return tables; }
+			const ctrack_result_tables &get_tables() const { return tables; }
 		};
 
 		inline int fetch_event_t_id()
@@ -1176,6 +1172,14 @@ namespace ctrack
 			{
 				entry = -1;
 			}
+
+			event_ptr = nullptr;
+			sub_events_ptr = nullptr;
+			current_event_id = nullptr;
+			current_event_cnt = nullptr;
+			string_id = nullptr;
+			thread_id = nullptr;
+
 			store::store_clear_cnt++;
 			store::track_start_time = std::chrono::high_resolution_clock::now();
 		}
@@ -1229,19 +1233,19 @@ namespace ctrack
 
 			return ss.str();
 		}
-		
+
 		inline ctrack_result_tables result_get_tables(ctrack_result_settings settings = {})
 		{
 			auto res = calc_stats_and_clear(settings);
 			return res.get_tables();
 		}
-		
+
 		inline summary_table result_get_summary_table(ctrack_result_settings settings = {})
 		{
 			auto res = calc_stats_and_clear(settings);
 			return res.get_tables().summary;
 		}
-		
+
 		inline detail_table result_get_detail_table(ctrack_result_settings settings = {})
 		{
 			auto res = calc_stats_and_clear(settings);
