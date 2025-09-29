@@ -50,6 +50,33 @@ void myFunction() {
    std::string results = ctrack::result_as_string();
    ```
 
+### Important: Scope-Based Tracking
+
+CTRACK uses RAII (Resource Acquisition Is Initialization) to track function execution times. **Events are recorded when the CTRACK object goes out of scope**. This has an important implication:
+
+```cpp
+int main() {
+    CTRACK;  // This won't track main() completely!
+    doWork();
+    ctrack::result_print();  // CTRACK is still in scope here
+    return 0;  // CTRACK records here when main() exits
+}
+```
+
+To properly track a section of code within a function, use explicit scoping:
+
+```cpp
+int main() {
+    {
+        CTRACK;  // Start tracking
+        doWork();
+    }  // CTRACK goes out of scope and records the event
+
+    ctrack::result_print();  // Now we can see the results
+    return 0;
+}
+```
+
 ### Example
 
 ```cpp
@@ -64,9 +91,12 @@ void expensiveOperation() {
 }
 
 int main() {
-    for (int i = 0; i < 100; ++i) {
-        expensiveOperation();
-    }
+    {
+        CTRACK;  // Track this block
+        for (int i = 0; i < 100; ++i) {
+            expensiveOperation();
+        }
+    }  // CTRACK records here
 
     // Print results to console
     ctrack::result_print();
@@ -75,7 +105,7 @@ int main() {
 }
 ```
 
-This basic usage will automatically track the performance of `expensiveOperation` and provide you with insights when you call `result_print()`.
+This basic usage will automatically track the performance of `expensiveOperation` and the main loop block, providing you with insights when you call `result_print()`.
 
 For more complex scenarios, configuration options, and advanced features, please refer to the [Advanced Usage](#advanced-usage) section below.
 Additionally, be sure to check out the examples directory in the repository for more detailed usage examples and best practices.
@@ -252,7 +282,25 @@ This is useful for large functions where you want multiple CTRACK entries with d
 
 The `result_print` and `result_as_string` functions are concise and located at the bottom of the CTRACK header. You can easily modify these or create custom functions to change the order, enable/disable colors, etc.
 
-The `calc_stats_and_clear` function produces the `ctrack_result` object. Instead of printing tables, you can access this data directly for custom analysis or integration with other systems.
+**Direct Data Access (v1.1.0+)**: You can now access the profiling results directly through structured data tables using:
+
+```cpp
+// Get all result tables (summary + details)
+auto tables = ctrack::result_get_tables();
+
+// Get only the summary table
+auto summary = ctrack::result_get_summary_table();
+
+// Get only the detail table
+auto details = ctrack::result_get_detail_table();
+
+// Access individual rows for custom processing
+for (const auto& row : summary.rows) {
+    // Process filename, function, line, call_count, percentages, etc.
+}
+```
+
+This enables easy data export to CSV, JSON, or any custom format without modifying the library.
 
 ### Example: Customizing Output
 
