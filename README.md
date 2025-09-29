@@ -314,15 +314,42 @@ CTRACK stands on the shoulders of giants in the C++ performance analysis ecosyst
 - [CppBenchmark](https://github.com/chronoxor/CppBenchmark)
 - [nanobench](https://github.com/martinus/nanobench)
 
+## Changelog
+
+### Version 1.1.0 (2025-09-29)
+
+#### New Features
+- **Comprehensive Benchmarking Suite**: Added complete benchmark framework with baseline comparison capabilities for tracking performance across releases
+- **Extensive Unit Testing**: Added comprehensive test suite covering basic functionality, edge cases, multithreaded scenarios, nested tracking, results processing, and statistics calculation
+- **Enhanced Performance Metrics**:
+  - Added summary fields for active exclusive time and percentage calculations
+  - Introduced structured result tables for improved performance reporting
+  - New template function for distinct field value extraction
+  - Direct data access API for advanced result analysis
+
+#### Performance Improvements
+- Reduced memory usage by avoiding nested maps in event storage
+- Enhanced distinct field value counting using unordered_set for better performance
+- Optimized event capacity reservation strategy to balance memory usage and reallocation overhead
+- Refactored event handling to use pointers for improved cache locality and performance
+
+#### Build System Enhancements
+- Added `BUILD_BENCHMARK=ON` CMake option for building benchmarking suite
+- Added `BUILD_TESTS=ON` CMake option for building unit tests
+- Improved CMake configuration with enhanced warning handling and platform detection
+
+#### Other Improvements
+- Improved code formatting and readability throughout ctrack.hpp
+- Added accuracy error measurement in benchmarks
+- Enhanced baseline data structure for benchmark comparison
+- Better handling of multithreaded test timing precision
+
+### Version 1.0.0
+- Initial release with core functionality
+
 ## Contributing
 
 We welcome and encourage contributions from the community! Your input helps make CTRACK better for everyone. Here's how you can contribute:
-
-### Roadmap
-
-- [ ] JSON Export Support
-- [ ] SQL Export Support
-- [ ] Handling Complex Circular
 
 ### Pull Requests
 
@@ -432,6 +459,21 @@ The baseline comparison will show:
 - **Overhead**: Lower is better; typical values range from 50-150% depending on the workload
 - **Memory/Event**: Should remain relatively constant; increases might indicate memory leaks
 - **Calculation Time**: Should scale linearly with event count; non-linear scaling indicates algorithmic issues
+
+## Roadmap
+
+CTRACK is actively developed with exciting features planned for future releases:
+
+### Planned Features
+
+- **Flamegraph Export**: Generate flame graphs for visual performance analysis
+- **JSON Export**: Export performance data in JSON format for integration with external tools
+- **CI/CD Runners**: Native integration with CI/CD pipelines for automated performance regression testing
+- **RDTSC Support**: Direct CPU cycle counting using RDTSC instruction for ultra-precise measurements
+- **Light Version**: Minimal overhead variant for production environments with extreme performance requirements
+- **Advanced Real-Time Reporting**: Live performance dashboards and real-time metric streaming capabilities
+
+We welcome community input on these features and suggestions for new ones. Please open an issue to discuss or contribute to any of these planned enhancements.
 
 ## License
 
