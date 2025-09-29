@@ -6,6 +6,7 @@ add_executable(ctrack_overhead_test ctrack_overhead_test.cpp)
 add_executable(high_variance_pi_estimation high_variance_pi_estimation.cpp)
 add_executable(complex_multithreaded_puzzle complex_multithreaded_puzzle.cpp)
 
+
 # Link the ctrack library to each example
 target_link_libraries(basic_singlethreaded PRIVATE ctrack)
 target_link_libraries(multithreaded_prime_counter PRIVATE ctrack)

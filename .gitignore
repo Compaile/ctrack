@@ -1,5 +1,6 @@
 # Build directory
 /build/
+/build_wsl/
 
 # CMake generated files
 CMakeCache.txt
@@ -51,3 +52,11 @@ Makefile
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Local documentation
+CLAUDE.local.md
+CLAUDE.md
+settings.json
+Testing/Temporary/LastTest.log
+Testing/Temporary/CTestCostData.txt
+.claude/settings.local.json

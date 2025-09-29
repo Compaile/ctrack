@@ -7,7 +7,7 @@ CTRACK is a powerful tool that can be seamlessly integrated into both developmen
 ## Features
 
 - Single header file
-- No dependencies (optional tbb for non msvc to use paralell result calculation) 
+- No dependencies (optional tbb for non msvc to use paralell result calculation)
 - Easy to use (just 1 line per function you want to track)
 - Minimal overhead (can record tens of millions events per second)
 - Optimized for multi-threaded environments
@@ -18,14 +18,12 @@ CTRACK is a powerful tool that can be seamlessly integrated into both developmen
 - Can be easily customized to filter out noise and only print events that matter. Recording levels can be adjusted based on the environment (production/development) to balance between insight and performance.
 - Includes a beautiful table print functionality for clear and readable output. While easy-to-use functions are provided for accessing CTRACK events, more experienced users can access all data directly for advanced analysis.
 
-
 ## Goals
 
 1. Help developers identify areas for performance improvement
 2. Monitor application performance in production
 
-
-## Basic Usage 
+## Basic Usage
 
 CTRACK is easy to use and provides powerful performance insights. Here's how to get started:
 
@@ -41,14 +39,43 @@ void myFunction() {
 2. To print the results, you have two options:
 
    a. Print colored results to the console:
+
    ```cpp
    ctrack::result_print();
    ```
 
    b. Get the results as a string (useful for logging or custom output):
+
    ```cpp
    std::string results = ctrack::result_as_string();
    ```
+
+### Important: Scope-Based Tracking
+
+CTRACK uses RAII (Resource Acquisition Is Initialization) to track function execution times. **Events are recorded when the CTRACK object goes out of scope**. This has an important implication:
+
+```cpp
+int main() {
+    CTRACK;  // This won't track main() completely!
+    doWork();
+    ctrack::result_print();  // CTRACK is still in scope here
+    return 0;  // CTRACK records here when main() exits
+}
+```
+
+To properly track a section of code within a function, use explicit scoping:
+
+```cpp
+int main() {
+    {
+        CTRACK;  // Start tracking
+        doWork();
+    }  // CTRACK goes out of scope and records the event
+
+    ctrack::result_print();  // Now we can see the results
+    return 0;
+}
+```
 
 ### Example
 
@@ -64,9 +91,12 @@ void expensiveOperation() {
 }
 
 int main() {
-    for (int i = 0; i < 100; ++i) {
-        expensiveOperation();
-    }
+    {
+        CTRACK;  // Track this block
+        for (int i = 0; i < 100; ++i) {
+            expensiveOperation();
+        }
+    }  // CTRACK records here
 
     // Print results to console
     ctrack::result_print();
@@ -75,12 +105,10 @@ int main() {
 }
 ```
 
-This basic usage will automatically track the performance of `expensiveOperation` and provide you with insights when you call `result_print()`.
+This basic usage will automatically track the performance of `expensiveOperation` and the main loop block, providing you with insights when you call `result_print()`.
 
 For more complex scenarios, configuration options, and advanced features, please refer to the [Advanced Usage](#advanced-usage) section below.
 Additionally, be sure to check out the examples directory in the repository for more detailed usage examples and best practices.
-
-
 
 ## Metrics & Output
 
@@ -89,6 +117,7 @@ CTRACK provides comprehensive performance metrics through two main components: t
 ### Time Units
 
 All times in CTRACK are presented and automatically converted in easily understandable units:
+
 - ns (nanoseconds)
 - μs (microseconds) printed as mcs
 - ms (milliseconds)
@@ -116,14 +145,15 @@ All times in CTRACK are presented and automatically converted in easily understa
 
 ![image](https://github.com/user-attachments/assets/0232a57c-8a3e-4a7b-a143-62bb8e2b9825)
 
-
 #### Summary Header
+
 - Start and End time of tracking
 - Total time
 - Time tracked (time spent in tracked functions)
 - Time tracked percentage
 
 #### Summary Entries
+
 - Filename, function, line
 - Number of calls
 - Time active exclusive for [0-100] and [center interval] (in percent and absolute)
@@ -136,6 +166,7 @@ The summary table is sorted by the active exclusive [center interval] metric.
 ![image](https://github.com/user-attachments/assets/ae9cf8e9-52b8-42ed-95fa-c95a418da510)
 
 For each function:
+
 - Filename, function, line
 - Time accumulated
 - Standard Deviation
@@ -194,15 +225,14 @@ To use CTRACK as a CMake package:
    target_link_libraries(your_target PRIVATE ctrack::ctrack)
    ```
 
-Note: If you are using a compiler which needs TBB for C++ standard parallel algorithms, you need to link to tbb. 
-  ```target_link_libraries( your_target PRIVATE  TBB::tbb )   ```
+Note: If you are using a compiler which needs TBB for C++ standard parallel algorithms, you need to link to tbb.
+`target_link_libraries( your_target PRIVATE  TBB::tbb )   `
 You can always fall back to sequential result calculation by setting
 CTRACK_DISABLE_EXECUTION_POLICY. The recording will be unchanged, but the printing/calculating of the stats will be a bit slower.
 
 For more detailed examples of how to use CTRACK with CMake, please refer to the `examples` directory in the CTRACK repository.
 
 Choose the installation method that best fits your project's needs and structure. Both methods provide full access to CTRACK's features and capabilities.
-
 
 ## Advanced Usage
 
@@ -252,7 +282,25 @@ This is useful for large functions where you want multiple CTRACK entries with d
 
 The `result_print` and `result_as_string` functions are concise and located at the bottom of the CTRACK header. You can easily modify these or create custom functions to change the order, enable/disable colors, etc.
 
-The `calc_stats_and_clear` function produces the `ctrack_result` object. Instead of printing tables, you can access this data directly for custom analysis or integration with other systems.
+**Direct Data Access (v1.1.0+)**: You can now access the profiling results directly through structured data tables using:
+
+```cpp
+// Get all result tables (summary + details)
+auto tables = ctrack::result_get_tables();
+
+// Get only the summary table
+auto summary = ctrack::result_get_summary_table();
+
+// Get only the detail table
+auto details = ctrack::result_get_detail_table();
+
+// Access individual rows for custom processing
+for (const auto& row : summary.rows) {
+    // Process filename, function, line, call_count, percentages, etc.
+}
+```
+
+This enables easy data export to CSV, JSON, or any custom format without modifying the library.
 
 ### Example: Customizing Output
 
@@ -273,8 +321,8 @@ The recording of events in this project is extremely fast. You can use the examp
 
 - On an i9-12900KS:
 
-    CTRACK can record 10,000,000 events in 132ms
-    This translates to over 75 million events per second
+  CTRACK can record 10,000,000 events in 132ms
+  This translates to over 75 million events per second
 
 The calculation of results is also efficient. However, the primary focus of ctrack is to have nearly zero overhead for tracking while allowing some overhead for calculating statistics at the end.
 Would you like me to explain any part of this new section or suggest any modifications?
@@ -303,35 +351,63 @@ While there are several excellent benchmarking and profiling tools available, CT
 
 CTRACK combines the ease of use of manual timing with the robustness of professional benchmarking tools, all in a package that's production-ready and highly adaptable. Its ability to quickly identify performance issues in multithreaded scenarios makes useful tool for modern C++ development.
 
-
 ## Inspired By
 
 CTRACK stands on the shoulders of giants in the C++ performance analysis ecosystem. We're grateful to the following projects and their maintainers for pioneering innovative approaches to performance measurement, particularly the timing-by-lifetime concepts that became foundational to CTRACK's design:
 
-- [Darknet](https://github.com/hank-ai/darknet) 
-- [dlib](https://dlib.net/dlib/timing.h.html) 
+- [Darknet](https://github.com/hank-ai/darknet)
+- [dlib](https://dlib.net/dlib/timing.h.html)
 - [Tracy Profiler](https://github.com/wolfpld/tracy)
 - [Google Benchmark](https://github.com/google/benchmark)
 - [CppBenchmark](https://github.com/chronoxor/CppBenchmark)
 - [nanobench](https://github.com/martinus/nanobench)
 
+## Changelog
+
+### Version 1.1.0 (2025-09-29)
+
+#### New Features
+- **Comprehensive Benchmarking Suite**: Added complete benchmark framework with baseline comparison capabilities for tracking performance across releases
+- **Extensive Unit Testing**: Added comprehensive test suite covering basic functionality, edge cases, multithreaded scenarios, nested tracking, results processing, and statistics calculation
+- **Enhanced Performance Metrics**:
+  - Added summary fields for active exclusive time and percentage calculations
+  - Introduced structured result tables for improved performance reporting
+  - New template function for distinct field value extraction
+  - Direct data access API for advanced result analysis
+
+#### Performance Improvements
+- Reduced memory usage by avoiding nested maps in event storage
+- Enhanced distinct field value counting using unordered_set for better performance
+- Optimized event capacity reservation strategy to balance memory usage and reallocation overhead
+- Refactored event handling to use pointers for improved cache locality and performance
+
+#### Build System Enhancements
+- Added `BUILD_BENCHMARK=ON` CMake option for building benchmarking suite
+- Added `BUILD_TESTS=ON` CMake option for building unit tests
+- Improved CMake configuration with enhanced warning handling and platform detection
+
+#### Other Improvements
+- Improved code formatting and readability throughout ctrack.hpp
+- Added accuracy error measurement in benchmarks
+- Enhanced baseline data structure for benchmark comparison
+- Better handling of multithreaded test timing precision
+
+### Version 1.0.0
+- Initial release with core functionality
 
 ## Contributing
 
 We welcome and encourage contributions from the community! Your input helps make CTRACK better for everyone. Here's how you can contribute:
 
-### Roadmap
-- [ ] JSON Export Support
-- [ ] SQL Export Support
-- [ ] Handling Complex Circular
-
 ### Pull Requests
+
 We're always excited to receive pull requests that improve CTRACK. When submitting a PR, please ensure:
 
 1. Your code adheres to the project's coding standards.
 2. Your contributions are MIT License compliant.
 
 ### Bug Reports
+
 Found a bug? We want to hear about it! Please open an issue on our GitHub repository with:
 
 1. A clear, descriptive title.
@@ -339,10 +415,114 @@ Found a bug? We want to hear about it! Please open an issue on our GitHub reposi
 3. Your environment details (OS, compiler version, etc.).
 
 ### Feature Requests
+
 Have an idea for a new feature? Feel free to open an issue to discuss it. We're always looking for ways to make CTRACK more useful.
 
+## Developer Guide
+
+### Performance Benchmarking
+
+CTRACK includes a comprehensive benchmark suite to measure and track library performance across different platforms and configurations. This benchmark is essential for:
+
+- Detecting performance regressions
+- Validating optimization improvements
+- Understanding CTRACK's overhead characteristics
+- Ensuring consistent behavior across platforms
+
+#### Building the Benchmark
+
+The benchmark is not built by default. To enable it:
+
+```bash
+mkdir build && cd build
+cmake .. -DBUILD_BENCHMARK=ON
+cmake --build .
+```
+
+#### Running the Benchmark
+
+The benchmark executable will be located at `build/benchmark/ctrack_benchmark`.
+
+Basic usage:
+
+```bash
+# Run with default settings (50 million events)
+./ctrack_benchmark
+
+# Run with custom event count and thread count
+./ctrack_benchmark --events 10000000 --threads 8
+
+# Enable verbose output
+./ctrack_benchmark --verbose
+```
+
+#### Benchmark Metrics
+
+The benchmark measures four key areas:
+
+1. **Accuracy**: Validates that CTRACK correctly records function execution times by comparing against known timing patterns.
+
+2. **Overhead**: Measures the performance impact of CTRACK instrumentation by comparing execution times with and without tracking enabled.
+
+3. **Memory Usage**: Calculates the memory consumption per tracked event, helping understand scalability limits.
+
+4. **Calculation Time**: Measures how long it takes to process recorded events and generate results.
+
+#### Baseline Comparison
+
+The benchmark supports baseline recording and comparison, which is crucial for tracking performance changes over time:
+
+```bash
+# Record a baseline
+./ctrack_benchmark --record-baseline
+
+# Compare current performance against baseline
+./ctrack_benchmark --compare-baseline
+
+# Use a custom baseline file
+./ctrack_benchmark --baseline my_baseline.json --record-baseline
+```
+
+The baseline comparison will show:
+
+- 🟢 Green indicators for improvements
+- 🔴 Red indicators for regressions
+- Percentage changes for each metric
+
+#### Best Practices for Benchmarking
+
+1. **Consistent Environment**: Run benchmarks on the same hardware and with minimal background processes for reliable comparisons.
+
+2. **Multiple Runs**: Consider running the benchmark multiple times and averaging results to account for system variability.
+
+3. **Platform-Specific Baselines**: Maintain separate baselines for different platforms (Linux, Windows, macOS) as performance characteristics may vary.
+
+4. **CI Integration**: Consider integrating the benchmark into your CI pipeline to automatically detect performance regressions.
+
+5. **Release Validation**: Always run the benchmark before releases to ensure performance hasn't degraded.
+
+#### Interpreting Results
+
+- **Accuracy**: Should remain consistent (typically around 5% error due to timing precision limits)
+- **Overhead**: Lower is better; typical values range from 50-150% depending on the workload
+- **Memory/Event**: Should remain relatively constant; increases might indicate memory leaks
+- **Calculation Time**: Should scale linearly with event count; non-linear scaling indicates algorithmic issues
+
+## Roadmap
+
+CTRACK is actively developed with exciting features planned for future releases:
+
+### Planned Features
+
+- **Flamegraph Export**: Generate flame graphs for visual performance analysis
+- **JSON Export**: Export performance data in JSON format for integration with external tools
+- **CI/CD Runners**: Native integration with CI/CD pipelines for automated performance regression testing
+- **RDTSC Support**: Direct CPU cycle counting using RDTSC instruction for ultra-precise measurements
+- **Light Version**: Minimal overhead variant for production environments with extreme performance requirements
+- **Advanced Real-Time Reporting**: Live performance dashboards and real-time metric streaming capabilities
+
+We welcome community input on these features and suggestions for new ones. Please open an issue to discuss or contribute to any of these planned enhancements.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
