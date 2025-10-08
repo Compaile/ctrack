@@ -263,8 +263,61 @@ CTRACK offers different tracking levels:
 You can selectively disable tracking groups:
 
 - `CTRACK_DISABLE_DEV`: Disables all `CTRACK_DEV` calls
+- `CTRACK_DISABLE_PROD`: Disables all `CTRACK_PROD` calls
 
 To completely disable CTRACK at compile time, define `CTRACK_DISABLE`.
+
+### Runtime Control (Optional)
+
+**NEW in v1.1.0**: CTRACK can be enabled/disabled at runtime for dynamic control over when tracking occurs. This is useful for:
+
+- Temporarily disabling tracking during initialization or cleanup
+- Enabling tracking only for specific workloads
+- Reducing overhead during performance-critical sections
+
+**Enable Runtime Control:**
+
+The runtime control feature is **disabled by default** to ensure zero overhead. To enable it, define `CTRACK_ENABLE_RUNTIME_CONTROL`:
+
+```cpp
+// Method 1: Define before including header
+#define CTRACK_ENABLE_RUNTIME_CONTROL
+#include "ctrack.hpp"
+
+// Method 2: Compiler flag
+// g++ -DCTRACK_ENABLE_RUNTIME_CONTROL ...
+
+// Method 3: CMake option
+// cmake -DENABLE_RUNTIME_CONTROL=ON
+```
+
+**API Functions:**
+
+```cpp
+ctrack::enable();          // Resume tracking
+ctrack::disable();         // Pause tracking
+ctrack::set_enabled(bool); // Set tracking state
+bool enabled = ctrack::is_enabled(); // Check current state
+```
+
+**Example:**
+
+```cpp
+// Tracking enabled by default
+expensive_calculation();  // Tracked ✓
+
+ctrack::disable();
+lightweight_work();       // NOT tracked ✗
+
+ctrack::enable();
+another_calculation();    // Tracked ✓
+```
+
+**Performance Impact:**
+- When `CTRACK_ENABLE_RUNTIME_CONTROL` is **NOT** defined: Zero overhead (default)
+- When `CTRACK_ENABLE_RUNTIME_CONTROL` is defined: ~1 CPU cycle overhead per CTRACK call (~0.3-0.5 nanoseconds)
+
+See `examples/runtime_control_demo.cpp` for a complete example.
 
 ### Custom Naming
 

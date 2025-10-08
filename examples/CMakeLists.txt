@@ -6,6 +6,11 @@ add_executable(ctrack_overhead_test ctrack_overhead_test.cpp)
 add_executable(high_variance_pi_estimation high_variance_pi_estimation.cpp)
 add_executable(complex_multithreaded_puzzle complex_multithreaded_puzzle.cpp)
 
+# Runtime control demo (only built when ENABLE_RUNTIME_CONTROL is ON)
+if(ENABLE_RUNTIME_CONTROL)
+    add_executable(runtime_control_demo runtime_control_demo.cpp)
+    target_link_libraries(runtime_control_demo PRIVATE ctrack)
+endif()
 
 # Link the ctrack library to each example
 target_link_libraries(basic_singlethreaded PRIVATE ctrack)

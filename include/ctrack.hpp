@@ -1,6 +1,20 @@
 // Copyright (c) 2024 COMPAILE Solutions GmbH - Grischa Hauser
 // License:MIT License See LICENSE for the full license.
 // https://github.com/Compaile/ctrack
+//
+// Compile-time configuration macros:
+//   CTRACK_DISABLE                     - Completely disable all tracking (zero overhead)
+//   CTRACK_DISABLE_DEV                 - Disable only CTRACK_DEV macros
+//   CTRACK_DISABLE_PROD                - Disable only CTRACK_PROD macros
+//   CTRACK_DISABLE_EXECUTION_POLICY    - Disable parallel execution in result calculation
+//   CTRACK_ENABLE_RUNTIME_CONTROL      - Enable runtime enable/disable (~1 cycle overhead)
+//                                        Provides: ctrack::enable(), disable(), set_enabled(), is_enabled()
+//
+// Usage:
+//   1. Define before including: #define CTRACK_ENABLE_RUNTIME_CONTROL
+//   2. Compiler flag: -DCTRACK_ENABLE_RUNTIME_CONTROL
+//   3. CMake option: cmake -DENABLE_RUNTIME_CONTROL=ON
+//
 #pragma once
 #ifndef CTRACK_H
 #define CTRACK_H
