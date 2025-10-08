@@ -697,6 +697,9 @@ namespace ctrack
 		struct store
 		{
 			inline static std::atomic<bool> write_events_locked = false;
+#ifdef CTRACK_ENABLE_RUNTIME_CONTROL
+			inline static std::atomic<bool> runtime_enabled{true};
+#endif
 			inline static std::mutex event_mutex;
 			inline static std::chrono::high_resolution_clock::time_point track_start_time = std::chrono::high_resolution_clock::now();
 			inline static std::atomic<unsigned int> store_clear_cnt = 0;
@@ -1091,9 +1094,17 @@ namespace ctrack
 		class EventHandler
 		{
 		public:
-			EventHandler(int line = __builtin_LINE(), const char *filename = __builtin_FILE(), const char *function = __builtin_FUNCTION(), std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now()) : line(line)
+			EventHandler(int line = __builtin_LINE(), const char *filename = __builtin_FILE(), const char *function = __builtin_FUNCTION()) : line(line)
 
 			{
+#ifdef CTRACK_ENABLE_RUNTIME_CONTROL
+				if (!store::runtime_enabled.load(std::memory_order_relaxed)) [[unlikely]]
+				{
+					return;
+				}
+				is_enabled = true;
+#endif
+				start_time = std::chrono::high_resolution_clock::now();
 
 				previous_store_clear_cnt = store::store_clear_cnt;
 				this->filename = filename;
@@ -1103,10 +1114,15 @@ namespace ctrack
 				}
 
 				register_event();
-				this->start_time = start_time;
 			}
 			~EventHandler()
 			{
+#ifdef CTRACK_ENABLE_RUNTIME_CONTROL
+				if (!is_enabled) [[unlikely]]
+				{
+					return;
+				}
+#endif
 				auto end_time = std::chrono::high_resolution_clock::now();
 				while (store::write_events_locked)
 				{
@@ -1139,6 +1155,9 @@ namespace ctrack
 				event_id = ++(*current_event_cnt);
 				*current_event_id = event_id;
 			}
+#ifdef CTRACK_ENABLE_RUNTIME_CONTROL
+			bool is_enabled = false;
+#endif
 			std::chrono::high_resolution_clock::time_point start_time;
 			int line;
 			unsigned int previous_store_clear_cnt;
@@ -1251,6 +1270,32 @@ namespace ctrack
 			auto res = calc_stats_and_clear(settings);
 			return res.get_tables().details;
 		}
+
+#ifdef CTRACK_ENABLE_RUNTIME_CONTROL
+		/// Enable runtime tracking
+		inline void enable()
+		{
+			store::runtime_enabled.store(true, std::memory_order_relaxed);
+		}
+
+		/// Disable runtime tracking
+		inline void disable()
+		{
+			store::runtime_enabled.store(false, std::memory_order_relaxed);
+		}
+
+		/// Set runtime tracking state
+		inline void set_enabled(bool enabled)
+		{
+			store::runtime_enabled.store(enabled, std::memory_order_relaxed);
+		}
+
+		/// Check if runtime tracking is enabled
+		inline bool is_enabled()
+		{
+			return store::runtime_enabled.load(std::memory_order_relaxed);
+		}
+#endif
 	}
 }
 

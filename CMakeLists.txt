@@ -16,6 +16,9 @@ option(BUILD_BENCHMARK "Build benchmark" OFF)
 # Option to build tests (default OFF)
 option(BUILD_TESTS "Build tests" OFF)
 
+# Option to enable runtime control (default OFF)
+option(ENABLE_RUNTIME_CONTROL "Enable runtime control for tracking" OFF)
+
 option(ENABLE_WARNINGS "Enable warnings" OFF)
 
 # Check for TBB
@@ -43,6 +46,14 @@ if(DISABLE_PAR)
     target_compile_definitions(ctrack INTERFACE CTRACK_DISABLE_EXECUTION_POLICY)
 elseif(NOT MSVC AND TBB_FOUND)
     target_link_libraries(ctrack INTERFACE TBB::tbb)
+endif()
+
+# Configure runtime control
+if(ENABLE_RUNTIME_CONTROL)
+    target_compile_definitions(ctrack INTERFACE CTRACK_ENABLE_RUNTIME_CONTROL)
+    message(STATUS "Runtime control enabled.")
+else()
+    message(STATUS "Runtime control disabled (default).")
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
