@@ -20,15 +20,15 @@ option(ENABLE_WARNINGS "Enable warnings" OFF)
 
 # Check for TBB
 if(NOT MSVC AND NOT DISABLE_PAR)
-    find_package(TBB QUIET)
-    if(TBB_FOUND)
-        message(STATUS "TBB found. Enabling parallel execution.")
-    else()
-        message(STATUS "TBB not found. Disabling parallel execution.")
-        set(DISABLE_PAR ON)
-    endif()
+  find_package(TBB QUIET)
+  if(TBB_FOUND)
+    message(STATUS "TBB found. Enabling parallel execution.")
+  else()
+    message(STATUS "TBB not found. Disabling parallel execution.")
+    set(DISABLE_PAR ON)
+  endif()
 elseif(DISABLE_PAR)
-    message(STATUS "DISABLE_PAR set. Disabling parallel execution.")
+  message(STATUS "DISABLE_PAR set. Disabling parallel execution.")
 endif()
 
 # Create the ctrack library
@@ -40,41 +40,41 @@ target_include_directories(ctrack INTERFACE
 
 # Configure ctrack based on TBB availability
 if(DISABLE_PAR)
-    target_compile_definitions(ctrack INTERFACE CTRACK_DISABLE_EXECUTION_POLICY)
+  target_compile_definitions(ctrack INTERFACE CTRACK_DISABLE_EXECUTION_POLICY)
 elseif(NOT MSVC AND TBB_FOUND)
-    target_link_libraries(ctrack INTERFACE TBB::tbb)
+  target_link_libraries(ctrack INTERFACE TBB::tbb)
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(ENABLE_WARNINGS)
-    if (NOT MSVC)
-        include(cmake/add_warning.cmake)
-        include(cmake/warnings.cmake)
-    endif()
+  if (NOT MSVC)
+    include(cmake/add_warning.cmake)
+    include(cmake/warnings.cmake)
+  endif()
 endif()
 
 # Add the examples subdirectory if not disabled
 if(NOT DISABLE_EXAMPLES)
-    add_subdirectory(examples)
+  add_subdirectory(examples)
 else()
-    message(STATUS "Building examples disabled.")
+  message(STATUS "Building examples disabled.")
 endif()
 
 # Add the benchmark subdirectory if enabled
 if(BUILD_BENCHMARK)
-    add_subdirectory(benchmark)
-    message(STATUS "Building benchmark enabled.")
+  add_subdirectory(benchmark)
+  message(STATUS "Building benchmark enabled.")
 else()
-    message(STATUS "Building benchmark disabled.")
+  message(STATUS "Building benchmark disabled.")
 endif()
 
 # Add the test subdirectory if enabled
 if(BUILD_TESTS)
-    add_subdirectory(test)
-    enable_testing()
-    message(STATUS "Building tests enabled.")
+  add_subdirectory(test)
+  enable_testing()
+  message(STATUS "Building tests enabled.")
 else()
-    message(STATUS "Building tests disabled.")
+  message(STATUS "Building tests disabled.")
 endif()
 
 # Installation
