@@ -1,24 +1,29 @@
-add_executable(ctrack_benchmark ctrack_benchmark.cpp)
-target_link_libraries(ctrack_benchmark PRIVATE ctrack)
-
-# Enable threading support
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-target_link_libraries(ctrack_benchmark PRIVATE Threads::Threads)
-
-# Add filesystem library if needed (for older compilers)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+# Helper macro — avoids repetition
+macro(add_ctrack_benchmark target_name clock_define)
+  add_executable(${target_name} ctrack_benchmark.cpp)
+  target_link_libraries(${target_name} PRIVATE ctrack)
+  target_compile_options(${target_name} PRIVATE -O3)
+  if(NOT "${clock_define}" STREQUAL "")
+    target_compile_definitions(${target_name} PRIVATE ${clock_define})
+  endif()
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+  find_package(Threads REQUIRED)
+  target_link_libraries(${target_name} PRIVATE Threads::Threads)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-        target_link_libraries(ctrack_benchmark PRIVATE stdc++fs)
+      target_link_libraries(${target_name} PRIVATE stdc++fs)
     endif()
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-        target_link_libraries(ctrack_benchmark PRIVATE c++fs)
+      target_link_libraries(${target_name} PRIVATE c++fs)
     endif()
-endif()
-
-# Set output directory
-set_target_properties(ctrack_benchmark
-    PROPERTIES
+  endif()
+  set_target_properties(${target_name} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmark"
-)
+  )
+endmacro()
+
+add_ctrack_benchmark(ctrack_benchmark "")
+add_ctrack_benchmark(ctrack_benchmark_rdtsc CTRACK_CLOCK_RDTSC)
+add_ctrack_benchmark(ctrack_benchmark_rdtscp CTRACK_CLOCK_RDTSCP)
+add_ctrack_benchmark(ctrack_benchmark_rdtscp_lfence  CTRACK_CLOCK_RDTSCP_LFENCE)

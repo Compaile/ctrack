@@ -1,4 +1,5 @@
 
+#add_compile_definitions(CTRACK_CLOCK_RDTSC) # ""=chrono
 # Create executables for each example
 add_executable(basic_singlethreaded basic_singlethreaded.cpp)
 add_executable(multithreaded_prime_counter multithreaded_prime_counter.cpp)
